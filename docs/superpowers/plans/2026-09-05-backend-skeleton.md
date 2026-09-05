@@ -15,7 +15,8 @@
 - Backend is FastAPI + PostgreSQL (spec §2) — no other backend framework or database engine.
 - Every sprint ends in a state that actually runs and is verified before the next sprint starts (spec §6) — no task in this plan is "done" until its manual verification command has actually been run and its output checked.
 - This sprint scaffolds only — no provider code, no ingestion jobs, no LLM code. Those are later sprints per spec §2–§4.
-- This machine has `python` on PATH (3.13.9), not `python3`. Use `python` in all commands. Docker must be installed and running before Task 2's steps.
+- This machine has `python` on PATH (3.13.9), not `python3`. Use `python` in all commands.
+- Docker Desktop is installed and running, but `docker` is NOT on PATH in this shell environment. Use the full path in every docker command: `/c/Users/ACER/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe`. Confirmed working: `docker.exe --version`, `docker.exe ps` both succeed via this full path. `docker compose` subcommand works the same way (`.../docker.exe compose up -d db`).
 - All commands below are given relative to the repo root of the current working tree (whatever that root is — a worktree or the main checkout). Do not hardcode an absolute path.
 
 ---
@@ -226,12 +227,13 @@ volumes:
 
 - [ ] **Step 2: Start Postgres and confirm it's healthy**
 
-Run (from the repo root):
+Run (from the repo root — `docker` is not on PATH, use the full path per Global Constraints):
 ```bash
-docker compose up -d db
-docker compose ps
+DOCKER=/c/Users/ACER/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe
+"$DOCKER" compose up -d db
+"$DOCKER" compose ps
 ```
-Expected: `db` service shows `healthy` (may take a few seconds — re-run `docker compose ps` if it still says `starting`).
+Expected: `db` service shows `healthy` (may take a few seconds — re-run `"$DOCKER" compose ps` if it still says `starting`).
 
 - [ ] **Step 3: Add settings and an example env file**
 
