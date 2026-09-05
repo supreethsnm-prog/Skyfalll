@@ -196,7 +196,7 @@ git commit -m "feat: add FastAPI skeleton with liveness health check"
 
 **Interfaces:**
 - Consumes: `app.main:app` (Task 1).
-- Produces: `app.config:get_settings() -> Settings` where `Settings.database_url: str`. `app.db:check_db_connection() -> bool` (returns `True` on success, raises `sqlalchemy.exc.OperationalError` on failure — callers catch this, never assume it returns `False`). Later provider/ingestion sprints reuse `app.db` for their own DB sessions.
+- Produces: `app.config:get_settings() -> Settings` where `Settings.database_url: str`. `app.db:check_db_connection() -> None` (raises `sqlalchemy.exc.OperationalError` on failure, returns nothing on success — the `/health/db` route does not catch this; it propagates as an unhandled 500 by design, an acceptable unhealthy-signal at this scaffolding stage). Later provider/ingestion sprints reuse `app.db` for their own DB sessions.
 
 - [ ] **Step 1: Add the Postgres service**
 
