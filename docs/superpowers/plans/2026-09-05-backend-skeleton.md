@@ -212,7 +212,7 @@ services:
       POSTGRES_PASSWORD: weathergpt_dev
       POSTGRES_DB: weathergpt
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -224,6 +224,8 @@ services:
 volumes:
   pgdata:
 ```
+
+Bound to `127.0.0.1` only — not reachable from the LAN.
 
 - [ ] **Step 2: Start Postgres and confirm it's healthy**
 
@@ -247,12 +249,15 @@ Create `backend/app/config.py`:
 
 ```python
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
     database_url: str = (
         "postgresql+psycopg://weathergpt:weathergpt_dev@localhost:5432/weathergpt"
@@ -302,10 +307,9 @@ from app.config import get_settings
 engine = create_engine(get_settings().database_url, pool_pre_ping=True)
 
 
-def check_db_connection() -> bool:
+def check_db_connection() -> None:
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
-    return True
 ```
 
 Modify `backend/app/main.py` to add the new route:
