@@ -5,7 +5,9 @@ from app.aviation.service import get_metar
 from app.db import check_db_connection, get_engine
 from app.geocoding.service import geocode_place
 from app.ingestion.alerts import ingest_alerts
+from app.ingestion.marine import ingest_pfz_zones
 from app.models import Alert
+from app.providers.incois import INCOISMarineProvider
 from app.providers.sachet import SACHETWarningProvider
 from app.weather.service import get_weather
 
@@ -63,3 +65,9 @@ def get_metar_endpoint(
     if result is None:
         raise HTTPException(status_code=404, detail="No METAR data for this station")
     return result
+
+
+@app.post("/internal/ingest/marine")
+def trigger_marine_ingestion() -> dict[str, int]:
+    count = ingest_pfz_zones(INCOISMarineProvider())
+    return {"ingested": count}
