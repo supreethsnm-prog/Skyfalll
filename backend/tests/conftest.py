@@ -44,36 +44,45 @@ def reset_db_caches():
     get_engine.cache_clear()
 
 
+def _truncate(model) -> None:
+    with get_engine().begin() as conn:
+        conn.execute(delete(model))
+
+
+# Each fixture clears its table both BEFORE and after the test. Cleaning only
+# on teardown leaves tests at the mercy of whatever is already in the shared
+# dev database — running the app locally (or a previously crashed run) would
+# otherwise leave rows behind that collide with a test's own seeded fixtures.
 @pytest.fixture
 def clean_alerts_table():
+    _truncate(Alert)
     yield
-    with get_engine().begin() as conn:
-        conn.execute(delete(Alert))
+    _truncate(Alert)
 
 
 @pytest.fixture
 def clean_weather_readings():
+    _truncate(WeatherReading)
     yield
-    with get_engine().begin() as conn:
-        conn.execute(delete(WeatherReading))
+    _truncate(WeatherReading)
 
 
 @pytest.fixture
 def clean_geocode_cache():
+    _truncate(GeocodeCache)
     yield
-    with get_engine().begin() as conn:
-        conn.execute(delete(GeocodeCache))
+    _truncate(GeocodeCache)
 
 
 @pytest.fixture
 def clean_metar_readings():
+    _truncate(MetarReading)
     yield
-    with get_engine().begin() as conn:
-        conn.execute(delete(MetarReading))
+    _truncate(MetarReading)
 
 
 @pytest.fixture
 def clean_pfz_zones():
+    _truncate(PfzZone)
     yield
-    with get_engine().begin() as conn:
-        conn.execute(delete(PfzZone))
+    _truncate(PfzZone)
