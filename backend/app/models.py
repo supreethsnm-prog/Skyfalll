@@ -76,3 +76,21 @@ class MetarReading(Base):
     longitude = Column(Float, nullable=True)
     raw_payload = Column(JSONB, nullable=False)
     fetched_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class PfzZone(Base):
+    __tablename__ = "pfz_zones"
+
+    id = Column(Integer, primary_key=True)
+    external_id = Column(String, unique=True, nullable=False)
+    category = Column(String, nullable=True)
+    sector_boundary = Column(Integer, nullable=True)
+    sector_name = Column(String, nullable=True)
+    julian_day = Column(String, nullable=True)
+    serial_number = Column(String, nullable=True)
+    year = Column(Integer, nullable=True)
+    uid = Column(Integer, nullable=True)
+    length_km = Column(Float, nullable=True)
+    geometry = Column(JSONB, nullable=False)
+    raw_payload = Column(JSONB, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), nullable=False)
