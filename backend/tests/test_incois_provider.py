@@ -87,12 +87,78 @@ MALFORMED_RESPONSE = {
 }
 
 
+FLOAT_UID_RESPONSE = {
+    "type": "FeatureCollection",
+    "totalFeatures": 1,
+    "features": [
+        {
+            "type": "Feature",
+            "id": "pfzlines.5",
+            "geometry": {
+                "type": "MultiLineString",
+                "coordinates": [[[68.4367, 22.7704], [68.4363, 22.7694]]],
+            },
+            "properties": {
+                "Category": "ghrsst",
+                "SECTORBOUN": 2,
+                "SECTORBO_1": 1,
+                "SECTORNAME": "",
+                "Julian_day": "248",
+                "Sno": "001",
+                "Year": 2021,
+                "UID": 2021248001.0,
+                "Length": 45.9872025145,
+            },
+        },
+    ],
+}
+
+NULL_PROPERTIES_RESPONSE = {
+    "type": "FeatureCollection",
+    "totalFeatures": 2,
+    "features": [
+        {
+            "type": "Feature",
+            "id": "pfzlines.6",
+            "geometry": {"type": "MultiLineString", "coordinates": [[[1.0, 2.0]]]},
+            "properties": {
+                "Category": "ghrsst",
+                "SECTORBOUN": 1,
+                "SECTORBO_1": 1,
+                "SECTORNAME": "",
+                "Julian_day": "100",
+                "Sno": "006",
+                "Year": 2021,
+                "UID": 2021100006,
+                "Length": 10.0,
+            },
+        },
+        {
+            # properties is present but null — must be skipped, not fatal
+            # to the whole batch.
+            "type": "Feature",
+            "id": "pfzlines.7",
+            "geometry": {"type": "MultiLineString", "coordinates": [[[3.0, 4.0]]]},
+            "properties": None,
+        },
+    ],
+}
+
+
 def _found_handler(request: httpx.Request) -> httpx.Response:
     return httpx.Response(200, json=FOUND_RESPONSE)
 
 
 def _malformed_handler(request: httpx.Request) -> httpx.Response:
     return httpx.Response(200, json=MALFORMED_RESPONSE)
+
+
+def _float_uid_handler(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json=FLOAT_UID_RESPONSE)
+
+
+def _null_properties_handler(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json=NULL_PROPERTIES_RESPONSE)
 
 
 def test_fetch_pfz_zones_normalizes_all_features():
@@ -126,3 +192,24 @@ def test_fetch_pfz_zones_skips_malformed_feature_without_failing_the_batch():
 
     assert len(zones) == 1
     assert zones[0].external_id == "pfzlines.3"
+
+
+def test_fetch_pfz_zones_coerces_float_uid_to_int():
+    client = httpx.Client(transport=httpx.MockTransport(_float_uid_handler))
+    provider = INCOISMarineProvider(client=client)
+
+    zones = provider.fetch_pfz_zones()
+
+    assert len(zones) == 1
+    assert zones[0].uid == 2021248001
+    assert isinstance(zones[0].uid, int)
+
+
+def test_fetch_pfz_zones_skips_feature_with_null_properties_without_failing_the_batch():
+    client = httpx.Client(transport=httpx.MockTransport(_null_properties_handler))
+    provider = INCOISMarineProvider(client=client)
+
+    zones = provider.fetch_pfz_zones()
+
+    assert len(zones) == 1
+    assert zones[0].external_id == "pfzlines.6"

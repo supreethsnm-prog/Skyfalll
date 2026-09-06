@@ -9,18 +9,37 @@ INCOIS_BASE_URL = "https://incois.gov.in/geoserver/PFZ_Automation/ows"
 logger = logging.getLogger(__name__)
 
 
+def _safe_int(value) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_float(value) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _normalize_feature(feature: dict) -> PfzZoneData:
-    properties = feature.get("properties", {})
+    properties = feature.get("properties")
+    if not isinstance(properties, dict):
+        # Covers both an absent "properties" key and a present-but-null
+        # (or otherwise non-dict) value — either way there's no usable
+        # property data, so treat this feature as malformed like any other.
+        raise TypeError(f"properties must be a dict, got {type(properties).__name__!r}")
     return PfzZoneData(
         external_id=feature["id"],
         category=properties.get("Category"),
-        sector_boundary=properties.get("SECTORBOUN"),
+        sector_boundary=_safe_int(properties.get("SECTORBOUN")),
         sector_name=properties.get("SECTORNAME"),
         julian_day=properties.get("Julian_day"),
         serial_number=properties.get("Sno"),
-        year=properties.get("Year"),
-        uid=properties.get("UID"),
-        length_km=properties.get("Length"),
+        year=_safe_int(properties.get("Year")),
+        uid=_safe_int(properties.get("UID")),
+        length_km=_safe_float(properties.get("Length")),
         geometry=feature["geometry"],
         raw_payload=feature,
     )
@@ -51,7 +70,7 @@ class INCOISMarineProvider:
             for feature in payload.get("features", []):
                 try:
                     zones.append(_normalize_feature(feature))
-                except (KeyError, TypeError) as exc:
+                except (KeyError, TypeError, AttributeError) as exc:
                     logger.warning(
                         "Skipping malformed PFZ feature %r: %s",
                         feature.get("id"),
