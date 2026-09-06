@@ -39,39 +39,53 @@ def chat_turn(
     history: list[dict] | None = None,
     provider: LLMProvider | None = None,
 ) -> dict:
+    # chat_turn owns the lifecycle of a provider it constructs itself (no
+    # provider argument given), and closes it once the loop is done. An
+    # injected provider (e.g. a test double, or a caller with a longer-lived
+    # instance such as the /chat endpoint's Depends-provided one) is never
+    # closed here — its lifecycle belongs to whoever constructed it.
+    owns_llm = provider is None
     llm = provider or AnthropicLLMProvider()
-    conversation = list(history or [])
-    conversation.append({"role": "user", "content": message})
+    try:
+        conversation = list(history or [])
+        conversation.append({"role": "user", "content": message})
 
-    for _ in range(_MAX_TOOL_ITERATIONS):
-        turn = llm.generate(system=_SYSTEM_PROMPT, history=conversation, tools=TOOL_SPECS)
+        for _ in range(_MAX_TOOL_ITERATIONS):
+            turn = llm.generate(system=_SYSTEM_PROMPT, history=conversation, tools=TOOL_SPECS)
 
-        if turn.tool_calls:
-            conversation.append(
-                {
-                    "role": "assistant",
-                    "content": turn.text or "",
-                    "tool_calls": [
-                        {"id": call.id, "name": call.name, "input": call.input}
-                        for call in turn.tool_calls
-                    ],
-                }
-            )
-            for call in turn.tool_calls:
-                result = execute_tool(call.name, call.input)
+            if turn.stop_reason == "max_tokens":
+                logger.warning("LLM response truncated (stop_reason=max_tokens)")
+
+            if turn.tool_calls:
                 conversation.append(
-                    {"role": "tool", "tool_call_id": call.id, "content": result}
+                    {
+                        "role": "assistant",
+                        "content": turn.text or "",
+                        "tool_calls": [
+                            {"id": call.id, "name": call.name, "input": call.input}
+                            for call in turn.tool_calls
+                        ],
+                    }
                 )
-            continue
+                for call in turn.tool_calls:
+                    result = execute_tool(call.name, call.input)
+                    conversation.append(
+                        {"role": "tool", "tool_call_id": call.id, "content": result}
+                    )
+                continue
 
-        conversation.append({"role": "assistant", "content": turn.text or ""})
-        return {"reply": turn.text or "", "history": conversation}
+            conversation.append({"role": "assistant", "content": turn.text or ""})
+            return {"reply": turn.text or "", "history": conversation}
 
-    logger.warning(
-        "Chat turn hit max tool-call iterations (%d) without a final answer",
-        _MAX_TOOL_ITERATIONS,
-    )
-    return {
-        "reply": "I wasn't able to finish looking that up — please try rephrasing your question.",
-        "history": conversation,
-    }
+        logger.warning(
+            "Chat turn hit max tool-call iterations (%d) without a final answer",
+            _MAX_TOOL_ITERATIONS,
+        )
+        fallback_reply = (
+            "I wasn't able to finish looking that up — please try rephrasing your question."
+        )
+        conversation.append({"role": "assistant", "content": fallback_reply})
+        return {"reply": fallback_reply, "history": conversation}
+    finally:
+        if owns_llm:
+            llm.close()

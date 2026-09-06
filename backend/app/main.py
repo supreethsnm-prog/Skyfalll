@@ -1,5 +1,7 @@
+from collections.abc import Generator
+
 from fastapi import Depends, FastAPI, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.aviation.service import get_metar
 from app.chat.service import chat_turn
@@ -79,7 +81,7 @@ def list_pfz_zones() -> list[dict]:
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., min_length=1, max_length=2000)
     history: list[dict] | None = None
 
 
@@ -87,12 +89,29 @@ class ChatRequest(BaseModel):
 # tests — every other route's service only reaches its provider on a cache miss, so
 # seeding Postgres keeps tests offline; chat has no such cache, so a real Depends
 # seam is needed here to override the LLM provider in tests.
-def get_llm_provider() -> LLMProvider:
-    return AnthropicLLMProvider()
+#
+# This is a generator dependency so FastAPI's Depends lifecycle closes the
+# provider after the request completes. chat_turn() only closes a provider it
+# constructs itself (see its docstring/comment) — since the endpoint always
+# passes this Depends-provided instance in as an explicit `provider` argument,
+# chat_turn treats it as injected and never closes it, so closing here is the
+# only place this instance gets cleaned up.
+def get_llm_provider() -> Generator[LLMProvider, None, None]:
+    try:
+        provider = AnthropicLLMProvider()
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    try:
+        yield provider
+    finally:
+        provider.close()
 
 
 @app.post("/chat")
 def chat_endpoint(
     request: ChatRequest, llm: LLMProvider = Depends(get_llm_provider)
 ) -> dict:
-    return chat_turn(request.message, request.history, provider=llm)
+    try:
+        return chat_turn(request.message, request.history, provider=llm)
+    except (KeyError, ValueError) as e:
+        raise HTTPException(status_code=422, detail=f"Invalid history: {e}") from e

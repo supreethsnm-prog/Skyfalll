@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     )
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
+    anthropic_max_tokens: int = 1024
 
 
 @lru_cache

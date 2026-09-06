@@ -1,6 +1,7 @@
 import httpx
 import pytest
 
+from app.config import get_settings
 from app.providers.anthropic import AnthropicLLMProvider
 from app.providers.llm import ToolSpec
 
@@ -20,9 +21,18 @@ def _client_returning(payload: dict, capture: dict | None = None) -> httpx.Clien
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
-def test_generate_raises_without_api_key():
-    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
-        AnthropicLLMProvider(api_key=None)
+def test_generate_raises_without_api_key(monkeypatch):
+    # Explicitly control the environment rather than relying on ambient state:
+    # if a real ANTHROPIC_API_KEY is ever set in the environment (exactly the
+    # state this feature requires once someone configures it), this test must
+    # still exercise the no-key path rather than silently no-op'ing.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    get_settings.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+            AnthropicLLMProvider(api_key=None)
+    finally:
+        get_settings.cache_clear()
 
 
 def test_generate_returns_text_only_turn():
@@ -190,6 +200,46 @@ def test_generate_batches_consecutive_tool_results_into_one_wire_message():
             {"type": "tool_result", "tool_use_id": "toolu_2", "content": '{"flight_category": "VFR"}'},
         ],
     }
+
+
+def test_generate_can_be_called_twice_on_the_same_instance():
+    # Regression test for the critical client-lifecycle bug: chat_turn calls
+    # generate() repeatedly on one long-lived provider instance whenever the
+    # model requests a tool call. The old code closed self._client in a
+    # `finally` at the end of EVERY generate() call, so the second call on
+    # any tool-using conversation raised
+    # `RuntimeError: Cannot send a request, as the client has been closed.`
+    # This test would have failed with that RuntimeError on the old code.
+    payload = {"content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn"}
+    client = _client_returning(payload)
+    provider = AnthropicLLMProvider(api_key="test-key", client=client)
+
+    first = provider.generate(system="sys", history=[{"role": "user", "content": "one"}], tools=[])
+    second = provider.generate(system="sys", history=[{"role": "user", "content": "two"}], tools=[])
+
+    assert first.text == "ok"
+    assert second.text == "ok"
+
+
+def test_close_closes_self_owned_client():
+    provider = AnthropicLLMProvider(api_key="test-key")
+    assert provider._owns_client is True
+    assert provider._client.is_closed is False
+
+    provider.close()
+
+    assert provider._client.is_closed is True
+
+
+def test_close_does_not_close_injected_client():
+    payload = {"content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn"}
+    injected_client = _client_returning(payload)
+    provider = AnthropicLLMProvider(api_key="test-key", client=injected_client)
+    assert provider._owns_client is False
+
+    provider.close()
+
+    assert injected_client.is_closed is False
 
 
 def test_generate_raises_on_http_error():

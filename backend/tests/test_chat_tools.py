@@ -3,9 +3,9 @@ from datetime import datetime, timezone
 
 from sqlalchemy import insert
 
-from app.chat.tools import TOOL_SPECS, execute_tool
+from app.chat.tools import _CHAT_TOOL_RESULT_CAP, TOOL_SPECS, execute_tool
 from app.db import get_engine
-from app.models import WeatherReading
+from app.models import Alert, PfzZone, WeatherReading
 
 
 def test_tool_specs_cover_all_five_data_sources():
@@ -102,3 +102,67 @@ def test_execute_list_pfz_zones_returns_json_list(clean_pfz_zones):
     result = json.loads(result_json)
 
     assert isinstance(result, list)
+
+
+def test_execute_list_alerts_caps_result_to_20(clean_alerts_table):
+    # Seed more than the chat-context cap of 20 rows and confirm the chat
+    # tool handler truncates — this is a chat-context size limit, not a
+    # data-correctness truncation (the real /alerts endpoint returns all rows).
+    with get_engine().begin() as conn:
+        for i in range(25):
+            conn.execute(
+                insert(Alert).values(
+                    external_id=f"alert-{i}",
+                    source="test",
+                    severity="minor",
+                    event_type="flood",
+                    raw_payload={"seeded": True},
+                    fetched_at=datetime.now(timezone.utc),
+                )
+            )
+
+    result_json = execute_tool("list_alerts", {})
+    result = json.loads(result_json)
+
+    assert isinstance(result, list)
+    assert len(result) == _CHAT_TOOL_RESULT_CAP
+
+
+def test_execute_list_pfz_zones_strips_geometry(clean_pfz_zones):
+    with get_engine().begin() as conn:
+        conn.execute(
+            insert(PfzZone).values(
+                external_id="zone-1",
+                category="test",
+                sector_name="test sector",
+                geometry={"type": "MultiLineString", "coordinates": [[[72.0, 19.0], [72.1, 19.1]]]},
+                raw_payload={"seeded": True},
+                fetched_at=datetime.now(timezone.utc),
+            )
+        )
+
+    result_json = execute_tool("list_pfz_zones", {})
+    result = json.loads(result_json)
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert "geometry" not in result[0]
+    # Other substantive fields must still be present.
+    assert result[0]["external_id"] == "zone-1"
+    assert result[0]["sector_name"] == "test sector"
+
+
+def test_execute_list_pfz_zones_caps_result_to_20(monkeypatch):
+    import app.chat.tools as tools_module
+
+    fake_zones = [
+        {"external_id": f"zone-{i}", "geometry": {"type": "MultiLineString", "coordinates": []}}
+        for i in range(25)
+    ]
+    monkeypatch.setattr(tools_module, "list_pfz_zones", lambda: fake_zones)
+
+    result_json = execute_tool("list_pfz_zones", {})
+    result = json.loads(result_json)
+
+    assert len(result) == _CHAT_TOOL_RESULT_CAP
+    assert all("geometry" not in zone for zone in result)

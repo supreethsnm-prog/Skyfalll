@@ -1,7 +1,10 @@
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.main import app, get_llm_provider
+from app.providers.anthropic import AnthropicLLMProvider
 from app.providers.llm import LLMTurn
 from tests.conftest import FakeLLMProvider
 
@@ -46,3 +49,49 @@ def test_chat_endpoint_accepts_prior_history(override_llm):
     sent_history = provider.calls[0]["history"]
     assert sent_history[0] == {"role": "user", "content": "Hi"}
     assert sent_history[-1] == {"role": "user", "content": "You still there?"}
+
+
+def test_chat_endpoint_returns_503_when_api_key_missing(monkeypatch):
+    # No dependency override here — let the real get_llm_provider run and hit
+    # the missing-key path, so a diagnostic 503 replaces what would otherwise
+    # be FastAPI's opaque default 500. backend/.env doesn't exist in this
+    # worktree, so delenv is sufficient regardless of ambient environment.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    get_settings.cache_clear()
+    try:
+        response = client.post("/chat", json={"message": "Hi"})
+
+        assert response.status_code == 503
+        assert "ANTHROPIC_API_KEY" in response.json()["detail"]
+    finally:
+        get_settings.cache_clear()
+
+
+def test_chat_endpoint_returns_422_for_malformed_history(override_llm):
+    # FakeLLMProvider ignores history content entirely, so this must exercise
+    # the real translation logic (AnthropicLLMProvider._translate_history,
+    # which raises ValueError on an unknown role) via a provider with an
+    # injected mock client — no real network involved.
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"content": [], "stop_reason": "end_turn"})
+
+    mock_client = httpx.Client(transport=httpx.MockTransport(handler))
+    provider = AnthropicLLMProvider(api_key="test-key", client=mock_client)
+    override_llm(provider)
+
+    response = client.post(
+        "/chat",
+        json={"message": "Hi", "history": [{"role": "not_a_real_role", "content": "x"}]},
+    )
+
+    assert response.status_code == 422
+    assert "not_a_real_role" in response.json()["detail"]
+
+
+def test_chat_endpoint_returns_422_for_empty_message(override_llm):
+    provider = FakeLLMProvider([LLMTurn(text="Hello!", tool_calls=[], stop_reason="end_turn")])
+    override_llm(provider)
+
+    response = client.post("/chat", json={"message": ""})
+
+    assert response.status_code == 422

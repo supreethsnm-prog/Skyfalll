@@ -82,12 +82,23 @@ def _handle_get_metar(tool_input: dict) -> dict:
     return result
 
 
+_CHAT_TOOL_RESULT_CAP = 20
+
+
 def _handle_list_alerts(tool_input: dict) -> list[dict]:
-    return list_alerts()
+    # Chat-context size limit, not a data-correctness truncation: the real
+    # /alerts endpoint (app/main.py) returns the full list.
+    return list_alerts()[:_CHAT_TOOL_RESULT_CAP]
 
 
 def _handle_list_pfz_zones(tool_input: dict) -> list[dict]:
-    return list_pfz_zones()
+    # Chat-context size limit (cap) plus geometry stripping: the LLM doesn't
+    # need raw coordinate geometry to answer a conversational question about
+    # which zones are active, and the full MultiLineString arrays risk
+    # crowding out max_tokens. The real /marine/pfz-zones endpoint (app/main.py)
+    # deliberately keeps geometry — this only affects the chat tool handler.
+    zones = list_pfz_zones()[:_CHAT_TOOL_RESULT_CAP]
+    return [{k: v for k, v in zone.items() if k != "geometry"} for zone in zones]
 
 
 _HANDLERS = {
@@ -105,6 +116,6 @@ def execute_tool(name: str, tool_input: dict) -> str:
         return json.dumps({"error": f"Unknown tool '{name}'"})
     try:
         result = handler(tool_input)
+        return json.dumps(result, default=str)
     except Exception as exc:
         return json.dumps({"error": f"Tool '{name}' failed: {exc}"})
-    return json.dumps(result, default=str)

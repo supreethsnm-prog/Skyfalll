@@ -78,45 +78,53 @@ class AnthropicLLMProvider:
                 "environment variable to enable chat."
             )
         self._model = model or settings.anthropic_model
+        self._max_tokens = settings.anthropic_max_tokens
         self._base_url = base_url
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=30.0)
 
     def generate(self, system: str, history: list[dict], tools: list[ToolSpec]) -> LLMTurn:
-        try:
-            response = self._client.post(
-                self._base_url,
-                headers={
-                    "x-api-key": self._api_key,
-                    "anthropic-version": ANTHROPIC_VERSION,
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": self._model,
-                    "max_tokens": 1024,
-                    "system": system,
-                    "messages": _translate_history(history),
-                    "tools": _translate_tools(tools),
-                },
-            )
-            response.raise_for_status()
-            payload = response.json()
+        response = self._client.post(
+            self._base_url,
+            headers={
+                "x-api-key": self._api_key,
+                "anthropic-version": ANTHROPIC_VERSION,
+                "content-type": "application/json",
+            },
+            json={
+                "model": self._model,
+                "max_tokens": self._max_tokens,
+                "system": system,
+                "messages": _translate_history(history),
+                "tools": _translate_tools(tools),
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
 
-            text_parts = []
-            tool_calls = []
-            for block in payload.get("content", []):
-                if block["type"] == "text":
-                    text_parts.append(block["text"])
-                elif block["type"] == "tool_use":
-                    tool_calls.append(
-                        ToolCall(id=block["id"], name=block["name"], input=block["input"])
-                    )
+        text_parts = []
+        tool_calls = []
+        for block in payload.get("content", []):
+            if block["type"] == "text":
+                text_parts.append(block["text"])
+            elif block["type"] == "tool_use":
+                tool_calls.append(
+                    ToolCall(id=block["id"], name=block["name"], input=block["input"])
+                )
 
-            return LLMTurn(
-                text="".join(text_parts) or None,
-                tool_calls=tool_calls,
-                stop_reason=payload.get("stop_reason", "end_turn"),
-            )
-        finally:
-            if self._owns_client:
-                self._client.close()
+        return LLMTurn(
+            text="".join(text_parts) or None,
+            tool_calls=tool_calls,
+            stop_reason=payload.get("stop_reason", "end_turn"),
+        )
+
+    def close(self) -> None:
+        """Close the underlying HTTP client, but only if this provider created it.
+
+        This provider's client is meant to stay open across the whole object's
+        lifetime (chat_turn calls generate() repeatedly on one instance whenever
+        the model requests a tool call), so closing happens here explicitly —
+        never inside generate() — and only for a self-owned client.
+        """
+        if self._owns_client:
+            self._client.close()
