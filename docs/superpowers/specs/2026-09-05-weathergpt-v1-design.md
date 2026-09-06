@@ -34,6 +34,8 @@ Cadences:
 
 Consequence: an upstream outage (e.g. SACHET down) stalls a cron, it does not break a live chat response — the app serves the last good cache. Geocoded place names are also cached in Postgres so repeat lookups don't re-hit the geocoding provider.
 
+**Amendment (point-location sources):** the scheduled-ingestion model above assumes a bounded source — a nationwide feed or a fixed grid that can be polled in full. It doesn't fit a source queried by arbitrary coordinate (weather-by-lat/lon): there is no fixed set of locations to precompute. For these sources, the query path may perform a live provider call, but only as a cache-miss fallback: check Postgres first (keyed by coordinate, rounded to ~1km precision), serve it if fresher than the source's cadence above, and only call the provider live — then cache the result — when the cache misses or has gone stale. This is a deliberate, narrow exception to "no external network call in the request path, ever," granted only to sources that are official, documented, and generously rate-limited (Open-Meteo qualifies; SACHET does not — SACHET's ingestion stays strictly scheduled-only, per its risk profile in §4). A repeat query for the same rounded coordinate within the cadence window never leaves Postgres.
+
 ## 4. Data sources — verified, per feature
 
 Every source below was tested directly (live HTTP calls) during research, not assumed from documentation.
