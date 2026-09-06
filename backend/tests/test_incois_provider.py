@@ -145,6 +145,59 @@ NULL_PROPERTIES_RESPONSE = {
 }
 
 
+NON_DICT_FEATURE_RESPONSE = {
+    "type": "FeatureCollection",
+    "totalFeatures": 2,
+    "features": [
+        {
+            "type": "Feature",
+            "id": "pfzlines.8",
+            "geometry": {"type": "MultiLineString", "coordinates": [[[1.0, 2.0]]]},
+            "properties": {
+                "Category": "ghrsst",
+                "SECTORBOUN": 1,
+                "SECTORBO_1": 1,
+                "SECTORNAME": "",
+                "Julian_day": "100",
+                "Sno": "008",
+                "Year": 2021,
+                "UID": 2021100008,
+                "Length": 10.0,
+            },
+        },
+        # A bare non-dict entry in "features" — must be skipped, not crash
+        # the exception handler itself (which logs feature.get("id")).
+        "not-a-feature",
+    ],
+}
+
+
+NUMERIC_STRING_FIELDS_RESPONSE = {
+    "type": "FeatureCollection",
+    "totalFeatures": 1,
+    "features": [
+        {
+            "type": "Feature",
+            "id": "pfzlines.9",
+            "geometry": {"type": "MultiLineString", "coordinates": [[[1.0, 2.0]]]},
+            "properties": {
+                # Sent as JSON numbers instead of strings — must be coerced,
+                # not raise and not silently store the wrong type.
+                "Category": 123,
+                "SECTORBOUN": 1,
+                "SECTORBO_1": 1,
+                "SECTORNAME": 456,
+                "Julian_day": 100,
+                "Sno": 9,
+                "Year": 2021,
+                "UID": 2021100009,
+                "Length": 10.0,
+            },
+        },
+    ],
+}
+
+
 def _found_handler(request: httpx.Request) -> httpx.Response:
     return httpx.Response(200, json=FOUND_RESPONSE)
 
@@ -159,6 +212,14 @@ def _float_uid_handler(request: httpx.Request) -> httpx.Response:
 
 def _null_properties_handler(request: httpx.Request) -> httpx.Response:
     return httpx.Response(200, json=NULL_PROPERTIES_RESPONSE)
+
+
+def _non_dict_feature_handler(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json=NON_DICT_FEATURE_RESPONSE)
+
+
+def _numeric_string_fields_handler(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json=NUMERIC_STRING_FIELDS_RESPONSE)
 
 
 def test_fetch_pfz_zones_normalizes_all_features():
@@ -213,3 +274,31 @@ def test_fetch_pfz_zones_skips_feature_with_null_properties_without_failing_the_
 
     assert len(zones) == 1
     assert zones[0].external_id == "pfzlines.6"
+
+
+def test_fetch_pfz_zones_skips_non_dict_feature_without_failing_the_batch():
+    client = httpx.Client(transport=httpx.MockTransport(_non_dict_feature_handler))
+    provider = INCOISMarineProvider(client=client)
+
+    zones = provider.fetch_pfz_zones()
+
+    assert len(zones) == 1
+    assert zones[0].external_id == "pfzlines.8"
+
+
+def test_fetch_pfz_zones_coerces_numeric_string_fields_to_str():
+    client = httpx.Client(transport=httpx.MockTransport(_numeric_string_fields_handler))
+    provider = INCOISMarineProvider(client=client)
+
+    zones = provider.fetch_pfz_zones()
+
+    assert len(zones) == 1
+    zone = zones[0]
+    assert zone.category == "123"
+    assert isinstance(zone.category, str)
+    assert zone.sector_name == "456"
+    assert isinstance(zone.sector_name, str)
+    assert zone.julian_day == "100"
+    assert isinstance(zone.julian_day, str)
+    assert zone.serial_number == "9"
+    assert isinstance(zone.serial_number, str)

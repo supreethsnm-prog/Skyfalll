@@ -77,6 +77,7 @@ def trigger_marine_ingestion() -> dict[str, int]:
 def list_pfz_zones() -> list[dict]:
     with get_engine().connect() as conn:
         rows = conn.execute(select(PfzZone)).mappings().all()
+    # geometry is deliberately included (it's substantive content here, not internal bookkeeping like raw_payload).
     return [
         {k: v for k, v in row.items() if k != "raw_payload"}
         for row in rows

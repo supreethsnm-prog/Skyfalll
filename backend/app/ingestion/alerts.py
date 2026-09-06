@@ -1,4 +1,4 @@
-"""Scheduled ingestion for SACHET's bounded, broadcast alert feed — see app/weather/service.py for the point-location cache-with-TTL pattern and app/geocoding/service.py for the permanent-cache pattern, both used where there's no fixed location set to precompute."""
+"""Scheduled ingestion for SACHET's bounded, broadcast alert feed (see app/ingestion/marine.py for a second instance of this same pattern) — see app/weather/service.py for the point-location cache-with-TTL pattern and app/geocoding/service.py for the permanent-cache pattern, both used where there's no fixed location set to precompute."""
 
 from datetime import datetime, timezone
 

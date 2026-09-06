@@ -3,16 +3,9 @@ from fastapi.testclient import TestClient
 from app.ingestion.marine import ingest_pfz_zones
 from app.main import app
 from app.providers.marine import PfzZoneData
+from tests.conftest import _FakeMarineProvider
 
 client = TestClient(app)
-
-
-class _FakeMarineProvider:
-    def __init__(self, zones: list[PfzZoneData]):
-        self._zones = zones
-
-    def fetch_pfz_zones(self) -> list[PfzZoneData]:
-        return self._zones
 
 
 def test_list_pfz_zones_returns_ingested_rows(clean_pfz_zones):

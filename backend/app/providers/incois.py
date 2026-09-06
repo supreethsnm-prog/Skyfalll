@@ -23,6 +23,12 @@ def _safe_float(value) -> float | None:
         return None
 
 
+def _safe_str(value) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
 def _normalize_feature(feature: dict) -> PfzZoneData:
     properties = feature.get("properties")
     if not isinstance(properties, dict):
@@ -32,11 +38,11 @@ def _normalize_feature(feature: dict) -> PfzZoneData:
         raise TypeError(f"properties must be a dict, got {type(properties).__name__!r}")
     return PfzZoneData(
         external_id=feature["id"],
-        category=properties.get("Category"),
+        category=_safe_str(properties.get("Category")),
         sector_boundary=_safe_int(properties.get("SECTORBOUN")),
-        sector_name=properties.get("SECTORNAME"),
-        julian_day=properties.get("Julian_day"),
-        serial_number=properties.get("Sno"),
+        sector_name=_safe_str(properties.get("SECTORNAME")),
+        julian_day=_safe_str(properties.get("Julian_day")),
+        serial_number=_safe_str(properties.get("Sno")),
         year=_safe_int(properties.get("Year")),
         uid=_safe_int(properties.get("UID")),
         length_km=_safe_float(properties.get("Length")),
@@ -70,10 +76,11 @@ class INCOISMarineProvider:
             for feature in payload.get("features", []):
                 try:
                     zones.append(_normalize_feature(feature))
-                except (KeyError, TypeError, AttributeError) as exc:
+                except (KeyError, ValueError, TypeError, AttributeError) as exc:
+                    feature_id = feature.get("id") if isinstance(feature, dict) else repr(feature)
                     logger.warning(
                         "Skipping malformed PFZ feature %r: %s",
-                        feature.get("id"),
+                        feature_id,
                         exc,
                     )
             return zones

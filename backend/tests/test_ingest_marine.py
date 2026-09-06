@@ -4,14 +4,7 @@ from app.db import get_engine
 from app.ingestion.marine import ingest_pfz_zones
 from app.models import PfzZone
 from app.providers.marine import PfzZoneData
-
-
-class _FakeMarineProvider:
-    def __init__(self, zones: list[PfzZoneData]):
-        self._zones = zones
-
-    def fetch_pfz_zones(self) -> list[PfzZoneData]:
-        return self._zones
+from tests.conftest import _FakeMarineProvider
 
 
 def _sample_zone(sector_name: str = "West Coast") -> PfzZoneData:

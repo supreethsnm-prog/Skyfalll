@@ -4,6 +4,7 @@ from sqlalchemy import delete
 from app.config import get_settings
 from app.db import get_engine
 from app.models import Alert, GeocodeCache, MetarReading, PfzZone, WeatherReading
+from app.providers.marine import PfzZoneData
 from app.providers.warning import AlertData
 
 
@@ -13,6 +14,14 @@ class FakeWarningProvider:
 
     def fetch_alerts(self) -> list[AlertData]:
         return self._alerts
+
+
+class _FakeMarineProvider:
+    def __init__(self, zones: list[PfzZoneData]):
+        self._zones = zones
+
+    def fetch_pfz_zones(self) -> list[PfzZoneData]:
+        return self._zones
 
 
 @pytest.fixture
