@@ -3,7 +3,7 @@ from sqlalchemy import delete
 
 from app.config import get_settings
 from app.db import get_engine
-from app.models import Alert
+from app.models import Alert, WeatherReading
 from app.providers.warning import AlertData
 
 
@@ -29,3 +29,10 @@ def clean_alerts_table():
     yield
     with get_engine().begin() as conn:
         conn.execute(delete(Alert))
+
+
+@pytest.fixture
+def clean_weather_readings():
+    yield
+    with get_engine().begin() as conn:
+        conn.execute(delete(WeatherReading))

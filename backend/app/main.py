@@ -5,6 +5,7 @@ from app.db import check_db_connection, get_engine
 from app.ingestion.alerts import ingest_alerts
 from app.models import Alert
 from app.providers.sachet import SACHETWarningProvider
+from app.weather.service import get_weather
 
 app = FastAPI(title="WeatherGPT Backend")
 
@@ -34,3 +35,8 @@ def list_alerts() -> list[dict]:
         {k: v for k, v in row.items() if k != "raw_payload"}
         for row in rows
     ]
+
+
+@app.get("/weather")
+def get_weather_endpoint(lat: float, lon: float) -> dict:
+    return get_weather(lat, lon)
