@@ -1,7 +1,9 @@
 from fastapi import FastAPI
+from sqlalchemy import select
 
-from app.db import check_db_connection
+from app.db import check_db_connection, get_engine
 from app.ingestion.alerts import ingest_alerts
+from app.models import Alert
 from app.providers.sachet import SACHETWarningProvider
 
 app = FastAPI(title="WeatherGPT Backend")
@@ -22,3 +24,10 @@ def health_db() -> dict[str, str]:
 def trigger_alert_ingestion() -> dict[str, int]:
     count = ingest_alerts(SACHETWarningProvider())
     return {"ingested": count}
+
+
+@app.get("/alerts")
+def list_alerts() -> list[dict]:
+    with get_engine().connect() as conn:
+        rows = conn.execute(select(Alert)).mappings().all()
+    return [dict(row) for row in rows]
