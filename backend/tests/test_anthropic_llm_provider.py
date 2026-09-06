@@ -26,7 +26,13 @@ def test_generate_raises_without_api_key(monkeypatch):
     # if a real ANTHROPIC_API_KEY is ever set in the environment (exactly the
     # state this feature requires once someone configures it), this test must
     # still exercise the no-key path rather than silently no-op'ing.
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    #
+    # backend/.env has an ANTHROPIC_API_KEY entry on dev machines, and
+    # pydantic-settings falls back to reading it directly whenever the var is
+    # absent from os.environ — so monkeypatch.delenv alone would NOT isolate
+    # this test from a real key sitting in .env. An empty-but-present env var
+    # takes precedence over that dotenv fallback, so use setenv("") instead.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
     get_settings.cache_clear()
     try:
         with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):

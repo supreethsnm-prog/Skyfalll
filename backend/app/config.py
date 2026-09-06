@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
     gemini_max_tokens: int = 1024
+    llm_provider: str = "auto"
 
 
 @lru_cache

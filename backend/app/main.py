@@ -10,7 +10,7 @@ from app.geocoding.service import geocode_place
 from app.ingestion.alerts import ingest_alerts
 from app.ingestion.marine import ingest_pfz_zones
 from app.marine import service as marine_service
-from app.providers.anthropic import AnthropicLLMProvider
+from app.providers.factory import build_llm_provider
 from app.providers.incois import INCOISMarineProvider
 from app.providers.llm import LLMProvider
 from app.providers.sachet import SACHETWarningProvider
@@ -98,7 +98,7 @@ class ChatRequest(BaseModel):
 # only place this instance gets cleaned up.
 def get_llm_provider() -> Generator[LLMProvider, None, None]:
     try:
-        provider = AnthropicLLMProvider()
+        provider = build_llm_provider()
     except ValueError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     try:

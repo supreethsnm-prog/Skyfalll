@@ -18,7 +18,7 @@ principle (WeatherGPT V1 design doc, section 1).
 import logging
 
 from app.chat.tools import TOOL_SPECS, execute_tool
-from app.providers.anthropic import AnthropicLLMProvider
+from app.providers.factory import build_llm_provider
 from app.providers.llm import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ def chat_turn(
     # instance such as the /chat endpoint's Depends-provided one) is never
     # closed here — its lifecycle belongs to whoever constructed it.
     owns_llm = provider is None
-    llm = provider or AnthropicLLMProvider()
+    llm = provider or build_llm_provider()
     try:
         conversation = list(history or [])
         conversation.append({"role": "user", "content": message})
@@ -76,7 +76,13 @@ def chat_turn(
                 for call in turn.tool_calls:
                     result = execute_tool(call.name, call.input)
                     conversation.append(
-                        {"role": "tool", "tool_call_id": call.id, "content": result}
+                        {
+                            "role": "tool",
+                            "tool_call_id": call.id,
+                            # Gemini matches a result to its call by name, not id.
+                            "name": call.name,
+                            "content": result,
+                        }
                     )
                 continue
 

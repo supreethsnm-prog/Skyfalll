@@ -54,9 +54,17 @@ def test_chat_endpoint_accepts_prior_history(override_llm):
 def test_chat_endpoint_returns_503_when_api_key_missing(monkeypatch):
     # No dependency override here — let the real get_llm_provider run and hit
     # the missing-key path, so a diagnostic 503 replaces what would otherwise
-    # be FastAPI's opaque default 500. backend/.env doesn't exist in this
-    # worktree, so delenv is sufficient regardless of ambient environment.
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    # be FastAPI's opaque default 500.
+    #
+    # get_llm_provider now goes through build_llm_provider(), which tries
+    # Anthropic then Gemini before raising, so both keys must be isolated.
+    # backend/.env has real entries for both on dev machines, and
+    # pydantic-settings falls back to reading it directly whenever a var is
+    # absent from os.environ — so delenv alone would not isolate this test.
+    # An empty-but-present env var takes precedence over that dotenv
+    # fallback, so use setenv("") for both.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("GEMINI_API_KEY", "")
     get_settings.cache_clear()
     try:
         response = client.post("/chat", json={"message": "Hi"})

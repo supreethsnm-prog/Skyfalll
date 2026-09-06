@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from app.config import Settings, get_settings
+from app.config import get_settings
 from app.providers.gemini import GeminiLLMProvider
 from app.providers.llm import ToolSpec
 
@@ -48,13 +48,13 @@ _TOOL_PAYLOAD = {
 
 
 def test_raises_without_api_key(monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     # A real GEMINI_API_KEY lives in backend/.env on dev machines. Deleting it
     # from os.environ isn't enough on its own: pydantic-settings falls back to
     # reading the dotenv file directly whenever the var is absent from the
-    # environment, which would silently reintroduce the real key here. Disable
-    # that fallback for this test too so the "no key anywhere" case is real.
-    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    # environment, which would silently reintroduce the real key here. An
+    # empty-but-present env var takes precedence over that dotenv fallback,
+    # so set it to "" rather than deleting it.
+    monkeypatch.setenv("GEMINI_API_KEY", "")
     get_settings.cache_clear()
     try:
         with pytest.raises(ValueError, match="GEMINI_API_KEY"):
