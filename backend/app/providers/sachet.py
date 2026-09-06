@@ -1,6 +1,10 @@
+import logging
+
 import httpx
 
 from app.providers.warning import AlertData
+
+logger = logging.getLogger(__name__)
 
 SACHET_BASE_URL = "https://sachet.ndma.gov.in/cap_public_website"
 
@@ -54,18 +58,35 @@ def normalize_imd_nowcast_alert(record: dict) -> AlertData:
 class SACHETWarningProvider:
     def __init__(self, base_url: str = SACHET_BASE_URL, client: httpx.Client | None = None):
         self._base_url = base_url
+        self._owns_client = client is None
         self._client = client or httpx.Client(timeout=10.0)
 
     def fetch_alerts(self) -> list[AlertData]:
-        return self._fetch_sdma_alerts() + self._fetch_imd_nowcast_alerts()
+        try:
+            return self._fetch_sdma_alerts() + self._fetch_imd_nowcast_alerts()
+        finally:
+            if self._owns_client:
+                self._client.close()
 
     def _fetch_sdma_alerts(self) -> list[AlertData]:
         response = self._client.get(f"{self._base_url}/FetchAllAlertDetails")
         response.raise_for_status()
-        return [normalize_sdma_alert(record) for record in response.json()]
+        alerts = []
+        for record in response.json():
+            try:
+                alerts.append(normalize_sdma_alert(record))
+            except (KeyError, ValueError, TypeError) as exc:
+                logger.warning("Skipping malformed SDMA alert record: %s", exc)
+        return alerts
 
     def _fetch_imd_nowcast_alerts(self) -> list[AlertData]:
         response = self._client.get(f"{self._base_url}/FetchIMDNowcastAlerts")
         response.raise_for_status()
         records = response.json().get("nowcastDetails", [])
-        return [normalize_imd_nowcast_alert(record) for record in records]
+        alerts = []
+        for record in records:
+            try:
+                alerts.append(normalize_imd_nowcast_alert(record))
+            except (KeyError, ValueError, TypeError) as exc:
+                logger.warning("Skipping malformed IMD nowcast alert record: %s", exc)
+        return alerts

@@ -4,6 +4,15 @@ from sqlalchemy import delete
 from app.config import get_settings
 from app.db import get_engine
 from app.models import Alert
+from app.providers.warning import AlertData
+
+
+class FakeWarningProvider:
+    def __init__(self, alerts: list[AlertData]):
+        self._alerts = alerts
+
+    def fetch_alerts(self) -> list[AlertData]:
+        return self._alerts
 
 
 @pytest.fixture

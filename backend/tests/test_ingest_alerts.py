@@ -4,14 +4,7 @@ from app.db import get_engine
 from app.ingestion.alerts import ingest_alerts
 from app.models import Alert
 from app.providers.warning import AlertData
-
-
-class _FakeProvider:
-    def __init__(self, alerts: list[AlertData]):
-        self._alerts = alerts
-
-    def fetch_alerts(self) -> list[AlertData]:
-        return self._alerts
+from tests.conftest import FakeWarningProvider
 
 
 def _sample_alert(severity: str = "ALERT") -> AlertData:
@@ -32,7 +25,7 @@ def _sample_alert(severity: str = "ALERT") -> AlertData:
 
 
 def test_ingest_alerts_inserts_new_alert(clean_alerts_table):
-    count = ingest_alerts(_FakeProvider([_sample_alert()]))
+    count = ingest_alerts(FakeWarningProvider([_sample_alert()]))
 
     assert count == 1
     with get_engine().connect() as conn:
@@ -44,8 +37,8 @@ def test_ingest_alerts_inserts_new_alert(clean_alerts_table):
 
 
 def test_ingest_alerts_upserts_existing_alert_by_external_id(clean_alerts_table):
-    ingest_alerts(_FakeProvider([_sample_alert(severity="ALERT")]))
-    count = ingest_alerts(_FakeProvider([_sample_alert(severity="WATCH")]))
+    ingest_alerts(FakeWarningProvider([_sample_alert(severity="ALERT")]))
+    count = ingest_alerts(FakeWarningProvider([_sample_alert(severity="WATCH")]))
 
     assert count == 1
     with get_engine().connect() as conn:

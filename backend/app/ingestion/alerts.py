@@ -6,19 +6,9 @@ from app.db import get_engine
 from app.models import Alert
 from app.providers.warning import WarningProvider
 
-_UPSERT_COLUMNS = (
-    "source",
-    "severity",
-    "event_type",
-    "area_description",
-    "effective_start_time",
-    "effective_end_time",
-    "warning_message",
-    "severity_color",
-    "latitude",
-    "longitude",
-    "raw_payload",
-    "fetched_at",
+_IMMUTABLE_COLUMNS = {"id", "external_id"}
+_UPSERT_COLUMNS = tuple(
+    col.name for col in Alert.__table__.columns if col.name not in _IMMUTABLE_COLUMNS
 )
 
 

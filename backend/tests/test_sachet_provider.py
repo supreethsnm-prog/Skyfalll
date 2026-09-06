@@ -21,7 +21,17 @@ SDMA_FIXTURE = [
         "alert_source": "Karnataka SDMA",
         "area_covered": "Belagavi",
         "sender_org_id": "KA-SDMA",
-    }
+    },
+    {
+        "severity": "ALERT",
+        "effective_start_time": "Sat Sep 05 16:05:00 IST 2026",
+        "effective_end_time": "Sat Sep 05 18:05:00 IST 2026",
+        "disaster_type": "Flood",
+        "area_description": "Missing identifier record",
+        "warning_message": "Malformed record with no identifier field.",
+        "severity_color": "red",
+        "centroid": "75.0,15.0",
+    },
 ]
 
 NOWCAST_FIXTURE = {

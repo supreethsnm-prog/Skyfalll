@@ -30,4 +30,7 @@ def trigger_alert_ingestion() -> dict[str, int]:
 def list_alerts() -> list[dict]:
     with get_engine().connect() as conn:
         rows = conn.execute(select(Alert)).mappings().all()
-    return [dict(row) for row in rows]
+    return [
+        {k: v for k, v in row.items() if k != "raw_payload"}
+        for row in rows
+    ]
