@@ -1,9 +1,13 @@
+import logging
+
 import httpx
 
 from app.providers.geocoding import GeocodeResultData
 
 NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org/search"
 _USER_AGENT = "WeatherGPT/0.1 (SIH 2026 hackathon project)"
+
+logger = logging.getLogger(__name__)
 
 
 class NominatimGeocodingProvider:
@@ -30,16 +34,22 @@ class NominatimGeocodingProvider:
                 return None
 
             result = results[0]
-            address = result.get("address", {})
-            return GeocodeResultData(
-                query=query,
-                display_name=result["display_name"],
-                latitude=float(result["lat"]),
-                longitude=float(result["lon"]),
-                country=address.get("country"),
-                state=address.get("state"),
-                raw_payload=result,
-            )
+            try:
+                address = result.get("address", {})
+                return GeocodeResultData(
+                    query=query,
+                    display_name=result["display_name"],
+                    latitude=float(result["lat"]),
+                    longitude=float(result["lon"]),
+                    country=address.get("country"),
+                    state=address.get("state"),
+                    raw_payload=result,
+                )
+            except (KeyError, ValueError, TypeError) as exc:
+                logger.warning(
+                    "Failed to parse Nominatim result for %r: %s", query, exc
+                )
+                raise
         finally:
             if self._owns_client:
                 self._client.close()

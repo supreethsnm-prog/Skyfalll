@@ -4,13 +4,14 @@ Place names don't move — unlike weather (see app/weather/service.py's
 cache-with-TTL pattern), a geocode result is cached forever once found,
 with no freshness check. This also respects Nominatim's usage policy,
 which requires client-side caching and caps regular/scripted use at 4
-requests/minute; see spec section 3.
+requests/minute; see spec section 3's amendments.
 """
 
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.engine import Engine
 
 from app.db import get_engine
 from app.models import GeocodeCache
@@ -28,8 +29,21 @@ _RESPONSE_FIELDS = (
 )
 
 
-def _to_response(row) -> dict:
+def _to_response(row) -> dict | None:
+    if row is None:
+        return None
     return {field: row[field] for field in _RESPONSE_FIELDS}
+
+
+def _read_cached(engine: Engine, normalized_query: str):
+    with engine.connect() as conn:
+        return (
+            conn.execute(
+                select(GeocodeCache).where(GeocodeCache.query == normalized_query)
+            )
+            .mappings()
+            .first()
+        )
 
 
 def geocode_place(
@@ -39,15 +53,7 @@ def geocode_place(
 
     engine = get_engine()
 
-    with engine.connect() as conn:
-        row = (
-            conn.execute(
-                select(GeocodeCache).where(GeocodeCache.query == normalized_query)
-            )
-            .mappings()
-            .first()
-        )
-
+    row = _read_cached(engine, normalized_query)
     if row is not None:
         return _to_response(row)
 
@@ -78,12 +84,4 @@ def geocode_place(
 
     # A concurrent request already inserted this query between our cache
     # check and this insert. Don't overwrite it — re-read what's there.
-    with engine.connect() as conn:
-        row = (
-            conn.execute(
-                select(GeocodeCache).where(GeocodeCache.query == normalized_query)
-            )
-            .mappings()
-            .first()
-        )
-    return _to_response(row)
+    return _to_response(_read_cached(engine, normalized_query))

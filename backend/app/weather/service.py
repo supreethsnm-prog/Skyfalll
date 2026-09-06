@@ -5,7 +5,9 @@ ingestion/query split: Open-Meteo has no bounded location set to
 precompute, so this module checks Postgres first and calls the provider
 live only on a cache miss or stale row (see spec section 3's amendment).
 Broadcast feeds with a bounded location set (e.g. SACHET alerts) use
-scheduled ingestion instead — see app/ingestion/.
+scheduled ingestion instead — see app/ingestion/. A third pattern,
+permanent caching with no TTL at all, is used where the upstream is
+rate-constrained rather than generous — see app/geocoding/service.py.
 """
 
 import logging
