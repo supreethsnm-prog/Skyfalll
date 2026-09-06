@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from sqlalchemy import select
 
 from app.db import check_db_connection, get_engine
+from app.geocoding.service import geocode_place
 from app.ingestion.alerts import ingest_alerts
 from app.models import Alert
 from app.providers.sachet import SACHETWarningProvider
@@ -43,3 +44,11 @@ def get_weather_endpoint(
     lon: float = Query(..., ge=-180, le=180),
 ) -> dict:
     return get_weather(lat, lon)
+
+
+@app.get("/geocode")
+def geocode_endpoint(q: str = Query(..., min_length=1)) -> dict:
+    result = geocode_place(q)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Location not found")
+    return result
