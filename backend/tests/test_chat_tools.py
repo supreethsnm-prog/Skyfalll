@@ -57,6 +57,24 @@ def test_execute_geocode_reports_not_found_as_in_band_error(monkeypatch):
     assert "error" in result
 
 
+def test_execute_get_weather_live_fetch_failure_returns_in_band_error(monkeypatch):
+    # Simulates a live provider failure (e.g. httpx.HTTPStatusError,
+    # httpx.ConnectError) on a cache miss, as opposed to malformed input.
+    # execute_tool must convert this to an in-band {"error": ...} result
+    # rather than letting it propagate and crash the chat turn.
+    import app.chat.tools as tools_module
+
+    def _boom(latitude, longitude):
+        raise RuntimeError("upstream weather provider unreachable")
+
+    monkeypatch.setattr(tools_module, "get_weather", _boom)
+
+    result_json = execute_tool("get_weather", {"latitude": 19.08, "longitude": 72.88})
+    result = json.loads(result_json)
+
+    assert "error" in result
+
+
 def test_execute_get_metar_missing_icao_returns_in_band_error():
     result_json = execute_tool("get_metar", {})
     result = json.loads(result_json)

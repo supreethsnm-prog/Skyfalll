@@ -105,6 +105,6 @@ def execute_tool(name: str, tool_input: dict) -> str:
         return json.dumps({"error": f"Unknown tool '{name}'"})
     try:
         result = handler(tool_input)
-    except (KeyError, TypeError, ValueError) as exc:
-        return json.dumps({"error": f"Invalid input for tool '{name}': {exc}"})
+    except Exception as exc:
+        return json.dumps({"error": f"Tool '{name}' failed: {exc}"})
     return json.dumps(result, default=str)
