@@ -42,3 +42,17 @@ class WeatherReading(Base):
     timezone = Column(String, nullable=False)
     raw_payload = Column(JSONB, nullable=False)
     fetched_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class GeocodeCache(Base):
+    __tablename__ = "geocode_cache"
+
+    id = Column(Integer, primary_key=True)
+    query = Column(String, unique=True, nullable=False)
+    display_name = Column(String, nullable=False)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    country = Column(String, nullable=True)
+    state = Column(String, nullable=True)
+    raw_payload = Column(JSONB, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), nullable=False)
