@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
     anthropic_max_tokens: int = 1024
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_max_tokens: int = 1024
 
 
 @lru_cache

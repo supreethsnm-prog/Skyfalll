@@ -1,0 +1,274 @@
+import json
+
+import httpx
+import pytest
+
+from app.config import Settings, get_settings
+from app.providers.gemini import GeminiLLMProvider
+from app.providers.llm import ToolSpec
+
+
+def _client_returning(payload: dict, capture: dict | None = None) -> httpx.Client:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if capture is not None:
+            capture["body"] = json.loads(request.content)
+            capture["headers"] = dict(request.headers)
+            capture["url"] = str(request.url)
+        return httpx.Response(200, json=payload)
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+_TEXT_PAYLOAD = {
+    "candidates": [
+        {"content": {"parts": [{"text": "Hello there."}], "role": "model"}, "finishReason": "STOP"}
+    ]
+}
+
+_TOOL_PAYLOAD = {
+    "candidates": [
+        {
+            "content": {
+                "parts": [
+                    {
+                        "functionCall": {
+                            "name": "get_weather",
+                            "args": {"latitude": 19.05, "longitude": 72.87},
+                        },
+                        "thoughtSignature": "opaque-blob-we-should-ignore",
+                    }
+                ],
+                "role": "model",
+            },
+            "finishReason": "STOP",
+            "finishMessage": "Model generated function call(s).",
+        }
+    ]
+}
+
+
+def test_raises_without_api_key(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    # A real GEMINI_API_KEY lives in backend/.env on dev machines. Deleting it
+    # from os.environ isn't enough on its own: pydantic-settings falls back to
+    # reading the dotenv file directly whenever the var is absent from the
+    # environment, which would silently reintroduce the real key here. Disable
+    # that fallback for this test too so the "no key anywhere" case is real.
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    get_settings.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="GEMINI_API_KEY"):
+            GeminiLLMProvider(api_key=None)
+    finally:
+        get_settings.cache_clear()
+
+
+def test_generate_returns_text_turn():
+    capture: dict = {}
+    provider = GeminiLLMProvider(
+        api_key="test-key", model="gemini-2.5-flash", client=_client_returning(_TEXT_PAYLOAD, capture)
+    )
+
+    turn = provider.generate(
+        system="You are a test assistant.",
+        history=[{"role": "user", "content": "Hi"}],
+        tools=[],
+    )
+
+    assert turn.text == "Hello there."
+    assert turn.tool_calls == []
+    assert turn.stop_reason == "end_turn"
+    # Auth must be a header, never a query param — secrets don't belong in URLs.
+    assert capture["headers"]["x-goog-api-key"] == "test-key"
+    assert "test-key" not in capture["url"]
+    assert "gemini-2.5-flash:generateContent" in capture["url"]
+    assert capture["body"]["systemInstruction"] == {"parts": [{"text": "You are a test assistant."}]}
+    assert capture["body"]["contents"] == [{"role": "user", "parts": [{"text": "Hi"}]}]
+
+
+def test_generate_detects_tool_call_despite_stop_finish_reason():
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(_TOOL_PAYLOAD))
+
+    turn = provider.generate(system="s", history=[{"role": "user", "content": "weather?"}], tools=[])
+
+    # Gemini reports finishReason STOP even for function calls — detection must
+    # be by the presence of functionCall parts, not by finishReason.
+    assert turn.stop_reason == "tool_use"
+    assert len(turn.tool_calls) == 1
+    call = turn.tool_calls[0]
+    assert call.name == "get_weather"
+    assert call.input == {"latitude": 19.05, "longitude": 72.87}
+    assert call.id  # synthesized locally; Gemini supplies no id
+
+
+def test_generate_maps_max_tokens_finish_reason():
+    payload = {
+        "candidates": [
+            {"content": {"parts": [{"text": "trunc"}], "role": "model"}, "finishReason": "MAX_TOKENS"}
+        ]
+    }
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(payload))
+    turn = provider.generate(system="s", history=[{"role": "user", "content": "x"}], tools=[])
+    assert turn.stop_reason == "max_tokens"
+
+
+def test_translates_tool_specs_to_function_declarations():
+    capture: dict = {}
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(_TEXT_PAYLOAD, capture))
+    tools = [
+        ToolSpec(
+            name="get_weather",
+            description="Get current weather.",
+            input_schema={"type": "object", "properties": {"latitude": {"type": "number"}}},
+        )
+    ]
+
+    provider.generate(system="s", history=[{"role": "user", "content": "hi"}], tools=tools)
+
+    assert capture["body"]["tools"] == [
+        {
+            "functionDeclarations": [
+                {
+                    "name": "get_weather",
+                    "description": "Get current weather.",
+                    "parameters": {"type": "object", "properties": {"latitude": {"type": "number"}}},
+                }
+            ]
+        }
+    ]
+
+
+def test_omits_tools_key_when_no_tools_given():
+    capture: dict = {}
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(_TEXT_PAYLOAD, capture))
+    provider.generate(system="s", history=[{"role": "user", "content": "hi"}], tools=[])
+    assert "tools" not in capture["body"]
+
+
+def test_translates_assistant_tool_call_and_tool_result_history():
+    capture: dict = {}
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(_TEXT_PAYLOAD, capture))
+
+    history = [
+        {"role": "user", "content": "Weather in Mumbai?"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "c1", "name": "get_weather", "input": {"latitude": 19.05, "longitude": 72.87}}
+            ],
+        },
+        {"role": "tool", "tool_call_id": "c1", "name": "get_weather", "content": '{"temperature_c": 26.2}'},
+    ]
+
+    provider.generate(system="s", history=history, tools=[])
+
+    contents = capture["body"]["contents"]
+    assert contents[0] == {"role": "user", "parts": [{"text": "Weather in Mumbai?"}]}
+    # assistant -> "model" role, tool_call -> functionCall (id dropped, Gemini has none)
+    assert contents[1] == {
+        "role": "model",
+        "parts": [
+            {"functionCall": {"name": "get_weather", "args": {"latitude": 19.05, "longitude": 72.87}}}
+        ],
+    }
+    # tool result -> user-role functionResponse, matched by NAME
+    assert contents[2] == {
+        "role": "user",
+        "parts": [{"functionResponse": {"name": "get_weather", "response": {"temperature_c": 26.2}}}],
+    }
+
+
+def test_tool_result_name_resolved_from_earlier_call_when_absent():
+    """A history round-tripped by an older client may omit `name` on tool entries."""
+    capture: dict = {}
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(_TEXT_PAYLOAD, capture))
+
+    history = [
+        {"role": "user", "content": "q"},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "c9", "name": "get_metar", "input": {}}]},
+        {"role": "tool", "tool_call_id": "c9", "content": "{}"},  # no "name" key
+    ]
+
+    provider.generate(system="s", history=history, tools=[])
+
+    assert capture["body"]["contents"][2]["parts"][0]["functionResponse"]["name"] == "get_metar"
+
+
+def test_non_object_tool_result_is_wrapped():
+    """execute_tool returns a JSON string that may encode a LIST (list_alerts,
+    list_pfz_zones). Gemini requires functionResponse.response to be an object."""
+    capture: dict = {}
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(_TEXT_PAYLOAD, capture))
+
+    history = [
+        {"role": "user", "content": "alerts?"},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "list_alerts", "input": {}}]},
+        {"role": "tool", "tool_call_id": "c1", "name": "list_alerts", "content": '[{"severity": "ALERT"}]'},
+    ]
+
+    provider.generate(system="s", history=history, tools=[])
+
+    resp = capture["body"]["contents"][2]["parts"][0]["functionResponse"]["response"]
+    assert resp == {"result": [{"severity": "ALERT"}]}
+
+
+def test_batches_consecutive_tool_results_into_one_message():
+    capture: dict = {}
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(_TEXT_PAYLOAD, capture))
+
+    history = [
+        {"role": "user", "content": "q"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "c1", "name": "get_weather", "input": {}},
+                {"id": "c2", "name": "get_metar", "input": {}},
+            ],
+        },
+        {"role": "tool", "tool_call_id": "c1", "name": "get_weather", "content": "{}"},
+        {"role": "tool", "tool_call_id": "c2", "name": "get_metar", "content": "{}"},
+    ]
+
+    provider.generate(system="s", history=history, tools=[])
+
+    contents = capture["body"]["contents"]
+    assert len(contents) == 3
+    assert len(contents[2]["parts"]) == 2
+
+
+def test_unknown_role_raises_value_error():
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(_TEXT_PAYLOAD))
+    with pytest.raises(ValueError, match="Unknown history role"):
+        provider.generate(system="s", history=[{"role": "system", "content": "x"}], tools=[])
+
+
+def test_generate_can_be_called_twice_on_a_self_owned_client():
+    """Regression guard: generate() must never close the client — chat_turn calls
+    it repeatedly on one instance whenever the model requests a tool."""
+    provider = GeminiLLMProvider(api_key="k")
+    provider._client = _client_returning(_TEXT_PAYLOAD)  # self-owned flag stays True
+    assert provider._owns_client is True
+
+    assert provider.generate(system="s", history=[{"role": "user", "content": "1"}], tools=[]).text
+    assert provider.generate(system="s", history=[{"role": "user", "content": "2"}], tools=[]).text
+
+    provider.close()
+    assert provider._client.is_closed
+
+
+def test_close_does_not_close_an_injected_client():
+    client = _client_returning(_TEXT_PAYLOAD)
+    provider = GeminiLLMProvider(api_key="k", client=client)
+    provider.close()
+    assert not client.is_closed
+
+
+def test_generate_raises_on_http_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, json={"error": "rate limited"})
+
+    provider = GeminiLLMProvider(api_key="k", client=httpx.Client(transport=httpx.MockTransport(handler)))
+    with pytest.raises(httpx.HTTPStatusError):
+        provider.generate(system="s", history=[{"role": "user", "content": "x"}], tools=[])
