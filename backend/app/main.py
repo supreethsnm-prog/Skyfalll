@@ -6,7 +6,7 @@ from app.db import check_db_connection, get_engine
 from app.geocoding.service import geocode_place
 from app.ingestion.alerts import ingest_alerts
 from app.ingestion.marine import ingest_pfz_zones
-from app.models import Alert
+from app.models import Alert, PfzZone
 from app.providers.incois import INCOISMarineProvider
 from app.providers.sachet import SACHETWarningProvider
 from app.weather.service import get_weather
@@ -71,3 +71,13 @@ def get_metar_endpoint(
 def trigger_marine_ingestion() -> dict[str, int]:
     count = ingest_pfz_zones(INCOISMarineProvider())
     return {"ingested": count}
+
+
+@app.get("/marine/pfz-zones")
+def list_pfz_zones() -> list[dict]:
+    with get_engine().connect() as conn:
+        rows = conn.execute(select(PfzZone)).mappings().all()
+    return [
+        {k: v for k, v in row.items() if k != "raw_payload"}
+        for row in rows
+    ]
