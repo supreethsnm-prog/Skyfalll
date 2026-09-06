@@ -56,3 +56,23 @@ class GeocodeCache(Base):
     state = Column(String, nullable=True)
     raw_payload = Column(JSONB, nullable=False)
     fetched_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class MetarReading(Base):
+    __tablename__ = "metar_readings"
+
+    id = Column(Integer, primary_key=True)
+    icao_id = Column(String, unique=True, nullable=False)
+    raw_metar = Column(String, nullable=False)
+    observed_at = Column(String, nullable=False)
+    temperature_c = Column(Float, nullable=True)
+    dewpoint_c = Column(Float, nullable=True)
+    wind_dir_deg = Column(Float, nullable=True)
+    wind_speed_kt = Column(Float, nullable=True)
+    visibility_sm = Column(Float, nullable=True)
+    flight_category = Column(String, nullable=True)
+    station_name = Column(String, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    raw_payload = Column(JSONB, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), nullable=False)
