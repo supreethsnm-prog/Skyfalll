@@ -3,7 +3,7 @@ from sqlalchemy import delete
 
 from app.config import get_settings
 from app.db import get_engine
-from app.models import Alert, GeocodeCache, WeatherReading
+from app.models import Alert, GeocodeCache, MetarReading, WeatherReading
 from app.providers.warning import AlertData
 
 
@@ -43,3 +43,10 @@ def clean_geocode_cache():
     yield
     with get_engine().begin() as conn:
         conn.execute(delete(GeocodeCache))
+
+
+@pytest.fixture
+def clean_metar_readings():
+    yield
+    with get_engine().begin() as conn:
+        conn.execute(delete(MetarReading))
