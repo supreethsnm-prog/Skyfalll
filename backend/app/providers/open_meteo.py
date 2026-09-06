@@ -1,6 +1,10 @@
+import logging
+
 import httpx
 
 from app.providers.weather import WeatherReadingData
+
+logger = logging.getLogger(__name__)
 
 OPEN_METEO_BASE_URL = "https://api.open-meteo.com/v1/forecast"
 _CURRENT_FIELDS = (
@@ -22,24 +26,33 @@ class OpenMeteoWeatherProvider:
                     "latitude": latitude,
                     "longitude": longitude,
                     "current": _CURRENT_FIELDS,
-                    "timezone": "Asia/Kolkata",
+                    "timezone": "auto",
                 },
             )
             response.raise_for_status()
             payload = response.json()
-            current = payload["current"]
-            return WeatherReadingData(
-                latitude=latitude,
-                longitude=longitude,
-                temperature_c=current["temperature_2m"],
-                humidity_pct=current["relative_humidity_2m"],
-                weather_code=current["weather_code"],
-                wind_speed_kmh=current["wind_speed_10m"],
-                wind_direction_deg=current["wind_direction_10m"],
-                observed_at=current["time"],
-                timezone=payload["timezone"],
-                raw_payload=payload,
-            )
+            try:
+                current = payload["current"]
+                return WeatherReadingData(
+                    latitude=latitude,
+                    longitude=longitude,
+                    temperature_c=current["temperature_2m"],
+                    humidity_pct=current["relative_humidity_2m"],
+                    weather_code=current["weather_code"],
+                    wind_speed_kmh=current["wind_speed_10m"],
+                    wind_direction_deg=current["wind_direction_10m"],
+                    observed_at=current["time"],
+                    timezone=payload["timezone"],
+                    raw_payload=payload,
+                )
+            except (KeyError, TypeError) as exc:
+                logger.warning(
+                    "Failed to parse Open-Meteo response for (%s, %s): %s",
+                    latitude,
+                    longitude,
+                    exc,
+                )
+                raise
         finally:
             if self._owns_client:
                 self._client.close()

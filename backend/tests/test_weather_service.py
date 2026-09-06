@@ -17,9 +17,11 @@ class _FakeWeatherProvider:
     def __init__(self, reading: WeatherReadingData):
         self._reading = reading
         self.calls = 0
+        self.received_coordinates = None
 
     def fetch_current(self, latitude, longitude):
         self.calls += 1
+        self.received_coordinates = (latitude, longitude)
         return self._reading
 
 
@@ -112,3 +114,56 @@ def test_get_weather_refetches_when_cache_is_stale(clean_weather_readings):
         ).fetchall()
     assert len(rows) == 1
     assert rows[0].temperature_c == 35.0
+
+
+def test_get_weather_rounds_coordinates_for_cache_key_and_provider_call(
+    clean_weather_readings,
+):
+    reading = WeatherReadingData(
+        latitude=19.08,
+        longitude=72.88,
+        temperature_c=27.0,
+        humidity_pct=70.0,
+        weather_code=3,
+        wind_speed_kmh=8.0,
+        wind_direction_deg=180.0,
+        observed_at="2026-09-06T15:00",
+        timezone="Asia/Kolkata",
+        raw_payload={"rounded": True},
+    )
+    provider = _FakeWeatherProvider(reading)
+
+    result = get_weather(19.0761, 72.8812, provider=provider)
+
+    assert provider.received_coordinates == (19.08, 72.88)
+    assert result["latitude"] == 19.08
+    assert result["longitude"] == 72.88
+
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            select(WeatherReading).where(
+                WeatherReading.latitude == 19.08, WeatherReading.longitude == 72.88
+            )
+        ).fetchall()
+    assert len(rows) == 1
+
+
+def test_get_weather_repeat_query_only_calls_provider_once(clean_weather_readings):
+    reading = WeatherReadingData(
+        latitude=19.08,
+        longitude=72.88,
+        temperature_c=27.0,
+        humidity_pct=70.0,
+        weather_code=3,
+        wind_speed_kmh=8.0,
+        wind_direction_deg=180.0,
+        observed_at="2026-09-06T15:00",
+        timezone="Asia/Kolkata",
+        raw_payload={"once": True},
+    )
+    provider = _FakeWeatherProvider(reading)
+
+    get_weather(19.08, 72.88, provider=provider)
+    get_weather(19.08, 72.88, provider=provider)
+
+    assert provider.calls == 1

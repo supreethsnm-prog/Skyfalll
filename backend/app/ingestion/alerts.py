@@ -1,3 +1,5 @@
+"""Scheduled ingestion for SACHET's bounded, broadcast alert feed — see app/weather/service.py for the point-location cache-with-TTL pattern used where there's no fixed location set to precompute."""
+
 from datetime import datetime, timezone
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert

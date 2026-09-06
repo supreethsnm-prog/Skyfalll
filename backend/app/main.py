@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from sqlalchemy import select
 
 from app.db import check_db_connection, get_engine
@@ -38,5 +38,8 @@ def list_alerts() -> list[dict]:
 
 
 @app.get("/weather")
-def get_weather_endpoint(lat: float, lon: float) -> dict:
+def get_weather_endpoint(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+) -> dict:
     return get_weather(lat, lon)
