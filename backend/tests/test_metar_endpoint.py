@@ -51,3 +51,9 @@ def test_metar_endpoint_rejects_wrong_length_icao_code():
     response = client.get("/metar", params={"icao": "AB"})
 
     assert response.status_code == 422
+
+
+def test_metar_endpoint_rejects_non_alphabetic_icao_code():
+    response = client.get("/metar", params={"icao": "1234"})
+
+    assert response.status_code == 422

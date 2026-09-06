@@ -1,8 +1,12 @@
+import logging
+
 import httpx
 
 from app.providers.aviation import MetarReadingData
 
 AVIATIONWEATHER_BASE_URL = "https://aviationweather.gov/api/data/metar"
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_float(value) -> float | None:
@@ -24,29 +28,37 @@ class AviationWeatherGovProvider:
                 self._base_url,
                 params={"ids": icao_id, "format": "json"},
             )
+            response.raise_for_status()
             if response.status_code == 204 or not response.text:
                 return None
-            response.raise_for_status()
             results = response.json()
             if not results:
                 return None
 
             result = results[0]
-            return MetarReadingData(
-                icao_id=result["icaoId"],
-                raw_metar=result["rawOb"],
-                observed_at=result["reportTime"],
-                temperature_c=_safe_float(result.get("temp")),
-                dewpoint_c=_safe_float(result.get("dewp")),
-                wind_dir_deg=_safe_float(result.get("wdir")),
-                wind_speed_kt=_safe_float(result.get("wspd")),
-                visibility_sm=_safe_float(result.get("visib")),
-                flight_category=result.get("fltCat"),
-                station_name=result.get("name"),
-                latitude=_safe_float(result.get("lat")),
-                longitude=_safe_float(result.get("lon")),
-                raw_payload=result,
-            )
+            try:
+                return MetarReadingData(
+                    icao_id=result["icaoId"],
+                    raw_metar=result["rawOb"],
+                    observed_at=result["reportTime"],
+                    temperature_c=_safe_float(result.get("temp")),
+                    dewpoint_c=_safe_float(result.get("dewp")),
+                    wind_dir_deg=_safe_float(result.get("wdir")),
+                    wind_speed_kt=_safe_float(result.get("wspd")),
+                    visibility_sm=_safe_float(result.get("visib")),
+                    flight_category=result.get("fltCat"),
+                    station_name=result.get("name"),
+                    latitude=_safe_float(result.get("lat")),
+                    longitude=_safe_float(result.get("lon")),
+                    raw_payload=result,
+                )
+            except (KeyError, TypeError) as exc:
+                logger.warning(
+                    "Failed to parse aviationweather.gov result for %r: %s",
+                    icao_id,
+                    exc,
+                )
+                raise
         finally:
             if self._owns_client:
                 self._client.close()

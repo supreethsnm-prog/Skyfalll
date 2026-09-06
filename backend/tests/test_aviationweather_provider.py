@@ -1,4 +1,5 @@
 import httpx
+import pytest
 
 from app.providers.aviationweather import AviationWeatherGovProvider
 
@@ -72,3 +73,15 @@ def test_fetch_metar_returns_none_on_204_empty_response():
     result = provider.fetch_metar("ZZZZ")
 
     assert result is None
+
+
+def _server_error_handler(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(503, content=b"")
+
+
+def test_fetch_metar_raises_on_server_error_with_empty_body():
+    client = httpx.Client(transport=httpx.MockTransport(_server_error_handler))
+    provider = AviationWeatherGovProvider(client=client)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        provider.fetch_metar("VABB")

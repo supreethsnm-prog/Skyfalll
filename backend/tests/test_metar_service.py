@@ -18,9 +18,11 @@ class _FakeAviationProvider:
         self._reading = reading
         self._exc = exc
         self.calls = 0
+        self.received_icao_id = None
 
     def fetch_metar(self, icao_id):
         self.calls += 1
+        self.received_icao_id = icao_id
         if self._exc is not None:
             raise self._exc
         return self._reading
@@ -130,6 +132,16 @@ def test_get_metar_normalizes_icao_id_to_uppercase(clean_metar_readings):
 
     assert result is not None
     assert result["icao_id"] == "VABB"
+
+
+def test_get_metar_passes_uppercased_icao_id_to_provider_on_cache_miss(
+    clean_metar_readings,
+):
+    provider = _FakeAviationProvider(_sample_reading())
+
+    get_metar("vabb", provider=provider)
+
+    assert provider.received_icao_id == "VABB"
 
 
 def test_get_metar_returns_none_when_station_has_no_data(clean_metar_readings):

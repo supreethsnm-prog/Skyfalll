@@ -100,6 +100,11 @@ def get_metar(
         raise
 
     if reading is None:
+        # Deliberate: an authoritative "no current observation" (204) is
+        # treated as not-found even if a stale row exists, unlike an
+        # upstream failure (caught above), which serves the stale row.
+        # A silent station outage does not mean the old reading is still
+        # a fair representation of current conditions.
         return None
 
     fetched_at = datetime.now(timezone.utc)

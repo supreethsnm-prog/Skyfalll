@@ -56,7 +56,9 @@ def geocode_endpoint(q: str = Query(..., min_length=1)) -> dict:
 
 
 @app.get("/metar")
-def get_metar_endpoint(icao: str = Query(..., min_length=4, max_length=4)) -> dict:
+def get_metar_endpoint(
+    icao: str = Query(..., min_length=4, max_length=4, pattern="^[A-Za-z]{4}$")
+) -> dict:
     result = get_metar(icao)
     if result is None:
         raise HTTPException(status_code=404, detail="No METAR data for this station")

@@ -8,6 +8,9 @@ Broadcast feeds with a bounded location set (e.g. SACHET alerts) use
 scheduled ingestion instead — see app/ingestion/. A third pattern,
 permanent caching with no TTL at all, is used where the upstream is
 rate-constrained rather than generous — see app/geocoding/service.py.
+This cache-with-TTL pattern is reusable, not a one-off: app/aviation/
+service.py follows the same shape for a second generously-rate-limited,
+point-queried source.
 """
 
 import logging
