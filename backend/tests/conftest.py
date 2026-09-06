@@ -4,8 +4,19 @@ from sqlalchemy import delete
 from app.config import get_settings
 from app.db import get_engine
 from app.models import Alert, GeocodeCache, MetarReading, PfzZone, WeatherReading
+from app.providers.llm import LLMTurn
 from app.providers.marine import PfzZoneData
 from app.providers.warning import AlertData
+
+
+class FakeLLMProvider:
+    def __init__(self, turns: list[LLMTurn]):
+        self._turns = list(turns)
+        self.calls: list[dict] = []
+
+    def generate(self, system, history, tools):
+        self.calls.append({"system": system, "history": [dict(h) for h in history], "tools": tools})
+        return self._turns.pop(0)
 
 
 class FakeWarningProvider:
