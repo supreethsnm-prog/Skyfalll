@@ -9,8 +9,11 @@ _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
+    # 127.0.0.1, not "localhost" — "localhost" adds a multi-second
+    # IPv6-then-IPv4 resolution stall on this machine before falling back;
+    # 127.0.0.1 connects immediately.
     database_url: str = (
-        "postgresql+psycopg://weathergpt:weathergpt_dev@localhost:5432/weathergpt"
+        "postgresql+psycopg://weathergpt:weathergpt_dev@127.0.0.1:5432/weathergpt"
     )
 
 
