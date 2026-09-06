@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Float, Integer, String
+from sqlalchemy import Column, DateTime, Float, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declarative_base
 
@@ -20,5 +20,25 @@ class Alert(Base):
     severity_color = Column(String, nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
+    raw_payload = Column(JSONB, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class WeatherReading(Base):
+    __tablename__ = "weather_readings"
+    __table_args__ = (
+        UniqueConstraint("latitude", "longitude", name="uq_weather_readings_lat_lon"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    temperature_c = Column(Float, nullable=False)
+    humidity_pct = Column(Float, nullable=False)
+    weather_code = Column(Integer, nullable=False)
+    wind_speed_kmh = Column(Float, nullable=False)
+    wind_direction_deg = Column(Float, nullable=False)
+    observed_at = Column(String, nullable=False)
+    timezone = Column(String, nullable=False)
     raw_payload = Column(JSONB, nullable=False)
     fetched_at = Column(DateTime(timezone=True), nullable=False)
