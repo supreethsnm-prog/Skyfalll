@@ -1,14 +1,14 @@
 from fastapi import FastAPI, HTTPException, Query
-from sqlalchemy import select
 
 from app.aviation.service import get_metar
-from app.db import check_db_connection, get_engine
+from app.db import check_db_connection
 from app.geocoding.service import geocode_place
 from app.ingestion.alerts import ingest_alerts
 from app.ingestion.marine import ingest_pfz_zones
-from app.models import Alert, PfzZone
+from app.marine import service as marine_service
 from app.providers.incois import INCOISMarineProvider
 from app.providers.sachet import SACHETWarningProvider
+from app.warning import service as warning_service
 from app.weather.service import get_weather
 
 app = FastAPI(title="WeatherGPT Backend")
@@ -33,12 +33,7 @@ def trigger_alert_ingestion() -> dict[str, int]:
 
 @app.get("/alerts")
 def list_alerts() -> list[dict]:
-    with get_engine().connect() as conn:
-        rows = conn.execute(select(Alert)).mappings().all()
-    return [
-        {k: v for k, v in row.items() if k != "raw_payload"}
-        for row in rows
-    ]
+    return warning_service.list_alerts()
 
 
 @app.get("/weather")
@@ -75,10 +70,5 @@ def trigger_marine_ingestion() -> dict[str, int]:
 
 @app.get("/marine/pfz-zones")
 def list_pfz_zones() -> list[dict]:
-    with get_engine().connect() as conn:
-        rows = conn.execute(select(PfzZone)).mappings().all()
     # geometry is deliberately included (it's substantive content here, not internal bookkeeping like raw_payload).
-    return [
-        {k: v for k, v in row.items() if k != "raw_payload"}
-        for row in rows
-    ]
+    return marine_service.list_pfz_zones()
