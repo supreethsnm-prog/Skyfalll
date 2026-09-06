@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+psycopg://weathergpt:weathergpt_dev@127.0.0.1:5432/weathergpt"
     )
+    anthropic_api_key: str | None = None
+    anthropic_model: str = "claude-sonnet-5"
 
 
 @lru_cache
