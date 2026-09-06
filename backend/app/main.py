@@ -1,12 +1,16 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
+from pydantic import BaseModel
 
 from app.aviation.service import get_metar
+from app.chat.service import chat_turn
 from app.db import check_db_connection
 from app.geocoding.service import geocode_place
 from app.ingestion.alerts import ingest_alerts
 from app.ingestion.marine import ingest_pfz_zones
 from app.marine import service as marine_service
+from app.providers.anthropic import AnthropicLLMProvider
 from app.providers.incois import INCOISMarineProvider
+from app.providers.llm import LLMProvider
 from app.providers.sachet import SACHETWarningProvider
 from app.warning import service as warning_service
 from app.weather.service import get_weather
@@ -72,3 +76,23 @@ def trigger_marine_ingestion() -> dict[str, int]:
 def list_pfz_zones() -> list[dict]:
     # geometry is deliberately included (it's substantive content here, not internal bookkeeping like raw_payload).
     return marine_service.list_pfz_zones()
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[dict] | None = None
+
+
+# Unlike every other route in this file, chat_turn has no cache to fall back to in
+# tests — every other route's service only reaches its provider on a cache miss, so
+# seeding Postgres keeps tests offline; chat has no such cache, so a real Depends
+# seam is needed here to override the LLM provider in tests.
+def get_llm_provider() -> LLMProvider:
+    return AnthropicLLMProvider()
+
+
+@app.post("/chat")
+def chat_endpoint(
+    request: ChatRequest, llm: LLMProvider = Depends(get_llm_provider)
+) -> dict:
+    return chat_turn(request.message, request.history, provider=llm)
