@@ -81,7 +81,7 @@ def test_transcribe_performs_discovery_then_compute_with_dynamic_auth_header():
     client = _client_for(_DISCOVERY_RESPONSE, _ASR_COMPUTE_RESPONSE, capture)
     provider = BhashiniSpeechProvider(user_id="test-user", inference_key="test-key", pipeline_id="test-pipeline", client=client)
 
-    result = provider.transcribe(audio_base64="ZmFrZS1hdWRpbw==", audio_format="wav", language="hi")
+    result = provider.transcribe(audio_base64="ZmFrZS1hdWRpbw==", audio_format="wav", language="hi", sampling_rate=8000)
 
     assert result.text == "मुंबई में मौसम कैसा है"
     assert result.source_language == "hi"
@@ -99,6 +99,7 @@ def test_transcribe_performs_discovery_then_compute_with_dynamic_auth_header():
     assert capture["compute_url"] == "https://dhruva-api.bhashini.gov.in/services/inference/pipeline"
     assert capture["compute_headers"]["x-compute-auth-key"] == "compute-secret-abc"
     assert capture["compute_request"]["pipelineTasks"][0]["config"]["serviceId"] == "asr-service-1"
+    assert capture["compute_request"]["pipelineTasks"][0]["config"]["samplingRate"] == 8000
     assert capture["compute_request"]["inputData"]["audio"][0]["audioContent"] == "ZmFrZS1hdWRpbw=="
 
 
