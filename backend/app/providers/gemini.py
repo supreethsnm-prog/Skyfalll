@@ -28,6 +28,7 @@ import httpx
 
 from app.config import get_settings
 from app.providers.llm import LLMTurn, ToolCall, ToolSpec
+from app.providers.retry import call_with_retries
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -143,17 +144,18 @@ class GeminiLLMProvider:
         if tools:
             body["tools"] = _translate_tools(tools)
 
-        response = self._client.post(
-            f"{self._base_url}/models/{self._model}:generateContent",
-            headers={
-                # Header auth, never a ?key= query param: secrets must not
-                # appear in URLs, where they leak into logs and proxies.
-                "x-goog-api-key": self._api_key,
-                "content-type": "application/json",
-            },
-            json=body,
+        response = call_with_retries(
+            lambda: self._client.post(
+                f"{self._base_url}/models/{self._model}:generateContent",
+                headers={
+                    # Header auth, never a ?key= query param: secrets must not
+                    # appear in URLs, where they leak into logs and proxies.
+                    "x-goog-api-key": self._api_key,
+                    "content-type": "application/json",
+                },
+                json=body,
+            )
         )
-        response.raise_for_status()
         payload = response.json()
 
         candidates = payload.get("candidates") or []
