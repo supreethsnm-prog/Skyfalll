@@ -53,3 +53,57 @@ def test_fetch_current_normalizes_response_and_preserves_input_coordinates():
     assert reading.observed_at == "2026-09-06T12:00"
     assert reading.timezone == "Asia/Kolkata"
     assert reading.raw_payload == SAMPLE_RESPONSE
+
+
+def test_fetch_forecast_zips_daily_arrays_into_one_record_per_day():
+    payload = {
+        "daily": {
+            "time": ["2026-09-07", "2026-09-08"],
+            "weather_code": [51, 53],
+            "temperature_2m_max": [28.2, 28.6],
+            "temperature_2m_min": [25.0, 25.3],
+            "precipitation_probability_max": [100, 96],
+            "precipitation_sum": [4.4, 4.4],
+            "wind_speed_10m_max": [13.9, 15.3],
+        }
+    }
+
+    def handler(request):
+        return httpx.Response(200, json=payload)
+
+    provider = OpenMeteoWeatherProvider(client=httpx.Client(transport=httpx.MockTransport(handler)))
+
+    days = provider.fetch_forecast(19.05, 72.87, days=2)
+
+    assert len(days) == 2
+    assert days[0].forecast_date == "2026-09-07"
+    assert days[0].weather_code == 51
+    assert days[0].temp_max_c == 28.2
+    assert days[0].temp_min_c == 25.0
+    assert days[0].precip_probability_pct == 100
+    assert days[0].precip_sum_mm == 4.4
+    assert days[0].wind_speed_max_kmh == 13.9
+    assert days[1].forecast_date == "2026-09-08"
+    assert days[1].temp_max_c == 28.6
+
+
+def test_fetch_forecast_handles_missing_precip_probability():
+    payload = {
+        "daily": {
+            "time": ["2026-09-07"],
+            "weather_code": [51],
+            "temperature_2m_max": [28.2],
+            "temperature_2m_min": [25.0],
+            "precipitation_probability_max": [None],
+            "precipitation_sum": [4.4],
+            "wind_speed_10m_max": [13.9],
+        }
+    }
+
+    def handler(request):
+        return httpx.Response(200, json=payload)
+
+    provider = OpenMeteoWeatherProvider(client=httpx.Client(transport=httpx.MockTransport(handler)))
+    days = provider.fetch_forecast(19.05, 72.87, days=1)
+
+    assert days[0].precip_probability_pct is None
