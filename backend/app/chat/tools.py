@@ -14,6 +14,8 @@ from app.forecast.service import get_forecast
 from app.geocoding.service import geocode_place
 from app.marine.service import list_pfz_zones
 from app.providers.llm import ToolSpec
+from app.skills.agriculture import get_agriculture_advisory
+from app.skills.urban import get_urban_advisory
 from app.warning.service import list_alerts
 from app.weather.service import get_weather
 
@@ -103,6 +105,40 @@ TOOL_SPECS: list[ToolSpec] = [
             },
         },
     ),
+    ToolSpec(
+        name="agriculture_advisory",
+        description=(
+            "Get a rules-based farming advisory (irrigation, heat-stress, frost, and "
+            "heavy-rain guidance) for a specific latitude/longitude coordinate, based on "
+            "the forecast and any active weather alerts nearby. Optionally pass a crop "
+            "name (e.g. 'rice', 'wheat', 'cotton', 'sugarcane') for a crop-specific note."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "latitude": {"type": "number", "description": "Latitude in decimal degrees"},
+                "longitude": {"type": "number", "description": "Longitude in decimal degrees"},
+                "crop": {"type": "string", "description": "Optional crop name, e.g. 'rice'"},
+            },
+            "required": ["latitude", "longitude"],
+        },
+    ),
+    ToolSpec(
+        name="urban_advisory",
+        description=(
+            "Get a rules-based urban-planning advisory (waterlogging, heat, and wind risk) "
+            "for a specific latitude/longitude coordinate, based on the forecast and any "
+            "active weather alerts nearby."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "latitude": {"type": "number", "description": "Latitude in decimal degrees"},
+                "longitude": {"type": "number", "description": "Longitude in decimal degrees"},
+            },
+            "required": ["latitude", "longitude"],
+        },
+    ),
 ]
 
 
@@ -155,6 +191,18 @@ def _handle_list_pfz_zones(tool_input: dict) -> list[dict]:
     return [{k: v for k, v in zone.items() if k != "geometry"} for zone in zones]
 
 
+def _handle_agriculture_advisory(tool_input: dict) -> dict:
+    return get_agriculture_advisory(
+        latitude=tool_input["latitude"],
+        longitude=tool_input["longitude"],
+        crop=tool_input.get("crop"),
+    )
+
+
+def _handle_urban_advisory(tool_input: dict) -> dict:
+    return get_urban_advisory(latitude=tool_input["latitude"], longitude=tool_input["longitude"])
+
+
 _HANDLERS = {
     "get_weather": _handle_get_weather,
     "get_forecast": _handle_get_forecast,
@@ -162,6 +210,8 @@ _HANDLERS = {
     "get_metar": _handle_get_metar,
     "list_alerts": _handle_list_alerts,
     "list_pfz_zones": _handle_list_pfz_zones,
+    "agriculture_advisory": _handle_agriculture_advisory,
+    "urban_advisory": _handle_urban_advisory,
 }
 
 

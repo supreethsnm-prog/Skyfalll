@@ -8,7 +8,7 @@ from app.db import get_engine
 from app.models import Alert, PfzZone, WeatherForecast, WeatherReading
 
 
-def test_tool_specs_cover_all_six_data_sources():
+def test_tool_specs_cover_all_eight_data_sources():
     names = {spec.name for spec in TOOL_SPECS}
     assert names == {
         "get_weather",
@@ -17,6 +17,8 @@ def test_tool_specs_cover_all_six_data_sources():
         "get_metar",
         "list_alerts",
         "list_pfz_zones",
+        "agriculture_advisory",
+        "urban_advisory",
     }
 
 
@@ -265,3 +267,79 @@ def test_execute_list_pfz_zones_caps_result_to_20(monkeypatch):
 
     assert len(result) == _CHAT_TOOL_RESULT_CAP
     assert all("geometry" not in zone for zone in result)
+
+
+def test_execute_agriculture_advisory_returns_json(monkeypatch):
+    import app.chat.tools as tools_module
+
+    monkeypatch.setattr(
+        tools_module,
+        "get_agriculture_advisory",
+        lambda latitude, longitude, crop=None: {"advisories": ["test advisory"], "crop": crop},
+    )
+
+    result_json = execute_tool("agriculture_advisory", {"latitude": 19.08, "longitude": 72.88})
+    result = json.loads(result_json)
+
+    assert result["advisories"] == ["test advisory"]
+    assert "error" not in result
+
+
+def test_execute_agriculture_advisory_passes_optional_crop(monkeypatch):
+    import app.chat.tools as tools_module
+
+    captured = {}
+
+    def _fake(latitude, longitude, crop=None):
+        captured["crop"] = crop
+        return {"advisories": [], "crop": crop}
+
+    monkeypatch.setattr(tools_module, "get_agriculture_advisory", _fake)
+
+    execute_tool("agriculture_advisory", {"latitude": 19.08, "longitude": 72.88, "crop": "wheat"})
+
+    assert captured["crop"] == "wheat"
+
+
+def test_execute_agriculture_advisory_omits_crop_when_not_given(monkeypatch):
+    import app.chat.tools as tools_module
+
+    captured = {}
+
+    def _fake(latitude, longitude, crop=None):
+        captured["crop"] = crop
+        return {"advisories": [], "crop": crop}
+
+    monkeypatch.setattr(tools_module, "get_agriculture_advisory", _fake)
+
+    execute_tool("agriculture_advisory", {"latitude": 19.08, "longitude": 72.88})
+
+    assert captured["crop"] is None
+
+
+def test_execute_urban_advisory_returns_json(monkeypatch):
+    import app.chat.tools as tools_module
+
+    monkeypatch.setattr(
+        tools_module,
+        "get_urban_advisory",
+        lambda latitude, longitude: {"risk_summary": {"heat_risk": "LOW"}},
+    )
+
+    result_json = execute_tool("urban_advisory", {"latitude": 19.08, "longitude": 72.88})
+    result = json.loads(result_json)
+
+    assert result["risk_summary"]["heat_risk"] == "LOW"
+    assert "error" not in result
+
+
+def test_tool_specs_agriculture_advisory_declares_expected_parameters():
+    spec = next(s for s in TOOL_SPECS if s.name == "agriculture_advisory")
+    assert set(spec.input_schema["properties"]) == {"latitude", "longitude", "crop"}
+    assert spec.input_schema["required"] == ["latitude", "longitude"]
+
+
+def test_tool_specs_urban_advisory_declares_expected_parameters():
+    spec = next(s for s in TOOL_SPECS if s.name == "urban_advisory")
+    assert set(spec.input_schema["properties"]) == {"latitude", "longitude"}
+    assert spec.input_schema["required"] == ["latitude", "longitude"]
