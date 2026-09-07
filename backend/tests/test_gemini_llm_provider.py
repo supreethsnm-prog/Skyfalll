@@ -265,7 +265,9 @@ def test_close_does_not_close_an_injected_client():
     assert not client.is_closed
 
 
-def test_generate_raises_on_http_error():
+def test_generate_raises_on_http_error(monkeypatch):
+    monkeypatch.setattr("app.providers.retry.time.sleep", lambda s: None)
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(429, json={"error": "rate limited"})
 

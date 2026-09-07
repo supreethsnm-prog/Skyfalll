@@ -248,7 +248,9 @@ def test_close_does_not_close_injected_client():
     assert injected_client.is_closed is False
 
 
-def test_generate_raises_on_http_error():
+def test_generate_raises_on_http_error(monkeypatch):
+    monkeypatch.setattr("app.providers.retry.time.sleep", lambda s: None)
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, json={"error": "boom"})
 
