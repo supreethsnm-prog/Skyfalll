@@ -94,3 +94,25 @@ class PfzZone(Base):
     geometry = Column(JSONB, nullable=False)
     raw_payload = Column(JSONB, nullable=False)
     fetched_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class WeatherForecast(Base):
+    __tablename__ = "weather_forecasts"
+    __table_args__ = (
+        UniqueConstraint(
+            "latitude", "longitude", "forecast_date", name="uq_weather_forecasts_lat_lon_date"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    forecast_date = Column(String, nullable=False)
+    weather_code = Column(Integer, nullable=False)
+    temp_max_c = Column(Float, nullable=False)
+    temp_min_c = Column(Float, nullable=False)
+    precip_probability_pct = Column(Float, nullable=True)
+    precip_sum_mm = Column(Float, nullable=False)
+    wind_speed_max_kmh = Column(Float, nullable=False)
+    raw_payload = Column(JSONB, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), nullable=False)
