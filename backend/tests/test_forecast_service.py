@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import insert, select
 
@@ -159,3 +159,46 @@ def test_get_forecast_upserts_multiple_days_without_duplicating(clean_weather_fo
             )
         ).fetchall()
     assert len(rows) == 2
+
+
+def test_get_forecast_excludes_past_dated_rows_and_returns_real_future_days(
+    clean_weather_forecasts,
+):
+    # Reproduces the live bug: once a coordinate's cached rows span a date
+    # boundary (a stale, never-pruned row from a previous day sitting
+    # alongside fresh future-dated rows), the cached-read SELECT must not
+    # let the stale row displace a real requested future day. Under the old
+    # code (no date filter on the SELECT, `rows[:days]` after ascending
+    # order) the stale past-dated row sorts first and IS included, silently
+    # pushing the last real future day out of the `[:days]` slice.
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    fresh_time = datetime.now(timezone.utc)
+
+    future_dates = [(today + timedelta(days=offset)).isoformat() for offset in range(5)]
+
+    with get_engine().begin() as conn:
+        # Stale leftover row from a previous day — must never be served.
+        conn.execute(
+            insert(WeatherForecast).values(
+                latitude=19.08, longitude=72.88, forecast_date=yesterday.isoformat(),
+                weather_code=51, temp_max_c=99.0, temp_min_c=99.0,
+                precip_probability_pct=50.0, precip_sum_mm=1.0, wind_speed_max_kmh=10.0,
+                raw_payload={"stale_past": True}, fetched_at=fresh_time,
+            )
+        )
+        for forecast_date in future_dates:
+            conn.execute(
+                insert(WeatherForecast).values(
+                    latitude=19.08, longitude=72.88, forecast_date=forecast_date,
+                    weather_code=51, temp_max_c=25.0, temp_min_c=20.0,
+                    precip_probability_pct=50.0, precip_sum_mm=1.0, wind_speed_max_kmh=10.0,
+                    raw_payload={"fresh_future": True}, fetched_at=fresh_time,
+                )
+            )
+
+    result = get_forecast(19.08, 72.88, days=5, provider=_RaisingForecastProvider())
+
+    result_dates = {r["forecast_date"] for r in result}
+    assert yesterday.isoformat() not in result_dates
+    assert result_dates == set(future_dates)

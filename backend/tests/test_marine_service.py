@@ -84,3 +84,28 @@ def test_list_pfz_zones_centroid_averages_all_points_across_all_lines(clean_pfz_
     rows = list_pfz_zones(latitude=19.06, longitude=72.89, radius_km=5.0)
 
     assert [r["external_id"] for r in rows] == ["multi-line-1"]
+
+
+def test_list_pfz_zones_skips_malformed_geometry_without_aborting_the_batch(clean_pfz_zones):
+    # An empty MultiLineString's coordinates list makes _centroid's averaging
+    # divide by zero (count == 0); this must not abort the whole filtered
+    # query — just that one zone should be skipped.
+    well_formed = _zone(
+        "near-1", {"type": "MultiLineString", "coordinates": [[[72.88, 19.06], [72.90, 19.08]]]}
+    )
+    malformed = _zone("malformed-1", {"type": "MultiLineString", "coordinates": []})
+    ingest_pfz_zones(_FakeMarineProvider([well_formed, malformed]))
+
+    rows = list_pfz_zones(latitude=19.05, longitude=72.87, radius_km=200.0)
+
+    assert [r["external_id"] for r in rows] == ["near-1"]
+
+
+def test_list_pfz_zones_with_only_latitude_returns_everything_unfiltered(clean_pfz_zones):
+    near = _zone("near-1", {"type": "MultiLineString", "coordinates": [[[72.88, 19.06], [72.90, 19.08]]]})
+    far = _zone("far-1", {"type": "MultiLineString", "coordinates": [[[77.2, 28.6], [77.3, 28.7]]]})
+    ingest_pfz_zones(_FakeMarineProvider([near, far]))
+
+    rows = list_pfz_zones(latitude=19.05)
+
+    assert {r["external_id"] for r in rows} == {"near-1", "far-1"}

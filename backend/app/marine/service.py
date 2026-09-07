@@ -1,6 +1,7 @@
 """Query-path read of ingested PFZ zone rows — see app/ingestion/marine.py
 for how this table is populated (scheduled-ingestion pattern)."""
 
+import logging
 from typing import Any
 
 from sqlalchemy import select
@@ -8,6 +9,8 @@ from sqlalchemy import select
 from app.db import get_engine
 from app.geo import haversine_km
 from app.models import PfzZone
+
+logger = logging.getLogger(__name__)
 
 
 def _centroid(geometry: dict[str, Any]) -> tuple[float, float]:
@@ -34,12 +37,28 @@ def list_pfz_zones(
     results = [{k: v for k, v in row.items() if k != "raw_payload"} for row in rows]
 
     if latitude is None or longitude is None:
+        if latitude is not None or longitude is not None:
+            logger.warning(
+                "list_pfz_zones received only one of latitude/longitude "
+                "(lat=%r, lon=%r) — location filtering requires both, "
+                "returning unfiltered results",
+                latitude,
+                longitude,
+            )
         return results
 
     nearby = []
     for row in results:
-        zone_lat, zone_lon = _centroid(row["geometry"])
-        distance = haversine_km(latitude, longitude, zone_lat, zone_lon)
+        try:
+            zone_lat, zone_lon = _centroid(row["geometry"])
+            distance = haversine_km(latitude, longitude, zone_lat, zone_lon)
+        except (TypeError, ValueError, ZeroDivisionError, KeyError) as exc:
+            logger.warning(
+                "Skipping PFZ zone %r with unparseable geometry: %s",
+                row["external_id"],
+                exc,
+            )
+            continue
         if distance <= radius_km:
             nearby.append({**row, "distance_km": round(distance, 1)})
 

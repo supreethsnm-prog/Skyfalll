@@ -6,7 +6,7 @@ per coordinate).
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -57,6 +57,7 @@ def get_forecast(
     rounded_lon = round(longitude, _COORDINATE_PRECISION)
 
     engine = get_engine()
+    today = date.today().isoformat()
 
     with engine.connect() as conn:
         rows = (
@@ -65,6 +66,7 @@ def get_forecast(
                 .where(
                     WeatherForecast.latitude == rounded_lat,
                     WeatherForecast.longitude == rounded_lon,
+                    WeatherForecast.forecast_date >= today,
                 )
                 .order_by(WeatherForecast.forecast_date)
             )
@@ -74,10 +76,13 @@ def get_forecast(
 
     now = datetime.now(timezone.utc)
     # A cached batch is treated as fresh only if there are enough rows to
-    # answer this request AND the freshest of them is still within the
-    # window — a stale or partial cache falls through to a live re-fetch,
-    # same as every other cache-with-TTL service in this codebase.
-    if len(rows) >= days and rows and (now - max(r["fetched_at"] for r in rows)) < _FRESHNESS_WINDOW:
+    # answer this request AND the OLDEST of them is still within the
+    # window — using the oldest (rather than the newest) fetched_at is the
+    # conservative direction, so a single freshly-refetched row can't make
+    # a set that also contains older leftover rows look fresh — a stale or
+    # partial cache falls through to a live re-fetch, same as every other
+    # cache-with-TTL service in this codebase.
+    if len(rows) >= days and rows and (now - min(r["fetched_at"] for r in rows)) < _FRESHNESS_WINDOW:
         return [_to_response(row) for row in rows[:days]]
 
     try:
@@ -91,7 +96,7 @@ def get_forecast(
                 "from %s",
                 rounded_lat,
                 rounded_lon,
-                max(r["fetched_at"] for r in rows),
+                min(r["fetched_at"] for r in rows),
             )
             if len(rows) < days:
                 logger.warning(

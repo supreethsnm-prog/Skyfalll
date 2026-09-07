@@ -106,3 +106,23 @@ def test_list_alerts_sorts_multiple_matches_by_distance(clean_alerts_table):
 
     assert [r["external_id"] for r in rows] == ["closer", "farther"]
     assert rows[0]["distance_km"] < rows[1]["distance_km"]
+
+
+def test_list_alerts_with_only_latitude_returns_everything_unfiltered(clean_alerts_table):
+    near = AlertData(
+        external_id="near-1", source="SACHET-SDMA", severity="Moderate", event_type="Flood",
+        area_description="Near", effective_start_time=None, effective_end_time=None,
+        warning_message=None, severity_color=None, latitude=19.05, longitude=72.87,
+        raw_payload={},
+    )
+    far = AlertData(
+        external_id="far-1", source="SACHET-SDMA", severity="Moderate", event_type="Flood",
+        area_description="Far", effective_start_time=None, effective_end_time=None,
+        warning_message=None, severity_color=None, latitude=28.6, longitude=77.2,
+        raw_payload={},
+    )
+    ingest_alerts(FakeWarningProvider([near, far]))
+
+    rows = list_alerts(latitude=19.05)
+
+    assert {r["external_id"] for r in rows} == {"near-1", "far-1"}
