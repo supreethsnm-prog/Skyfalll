@@ -9,6 +9,7 @@ import httpx
 
 from app.config import get_settings
 from app.providers.llm import LLMTurn, ToolCall, ToolSpec
+from app.providers.retry import call_with_retries
 
 ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
@@ -84,22 +85,23 @@ class AnthropicLLMProvider:
         self._client = client or httpx.Client(timeout=30.0)
 
     def generate(self, system: str, history: list[dict], tools: list[ToolSpec]) -> LLMTurn:
-        response = self._client.post(
-            self._base_url,
-            headers={
-                "x-api-key": self._api_key,
-                "anthropic-version": ANTHROPIC_VERSION,
-                "content-type": "application/json",
-            },
-            json={
-                "model": self._model,
-                "max_tokens": self._max_tokens,
-                "system": system,
-                "messages": _translate_history(history),
-                "tools": _translate_tools(tools),
-            },
+        response = call_with_retries(
+            lambda: self._client.post(
+                self._base_url,
+                headers={
+                    "x-api-key": self._api_key,
+                    "anthropic-version": ANTHROPIC_VERSION,
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": self._model,
+                    "max_tokens": self._max_tokens,
+                    "system": system,
+                    "messages": _translate_history(history),
+                    "tools": _translate_tools(tools),
+                },
+            )
         )
-        response.raise_for_status()
         payload = response.json()
 
         text_parts = []

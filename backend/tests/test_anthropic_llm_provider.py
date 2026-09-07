@@ -257,3 +257,38 @@ def test_generate_raises_on_http_error():
 
     with pytest.raises(httpx.HTTPStatusError):
         provider.generate(system="sys", history=[{"role": "user", "content": "hi"}], tools=[])
+
+
+def test_generate_retries_on_transient_failure_then_succeeds(monkeypatch):
+    monkeypatch.setattr("app.providers.retry.time.sleep", lambda s: None)
+    calls = {"count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["count"] += 1
+        if calls["count"] < 3:
+            return httpx.Response(503)
+        return httpx.Response(200, json={"content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    provider = AnthropicLLMProvider(api_key="test-key", client=client)
+
+    turn = provider.generate(system="s", history=[{"role": "user", "content": "hi"}], tools=[])
+
+    assert turn.text == "ok"
+    assert calls["count"] == 3
+
+
+def test_generate_does_not_retry_on_permanent_client_error(monkeypatch):
+    slept = []
+    monkeypatch.setattr("app.providers.retry.time.sleep", lambda s: slept.append(s))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": "invalid api key"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    provider = AnthropicLLMProvider(api_key="bad-key", client=client)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        provider.generate(system="s", history=[{"role": "user", "content": "hi"}], tools=[])
+
+    assert slept == []
