@@ -28,6 +28,8 @@ from app.providers.llm import LLMProvider
 from app.providers.sachet import SACHETWarningProvider
 from app.providers.speech import SpeechToTextProvider, TextToSpeechProvider
 from app.scheduler import IngestionScheduler
+from app.skills.agriculture import get_agriculture_advisory
+from app.skills.urban import get_urban_advisory
 from app.voice.service import voice_chat
 from app.warning import service as warning_service
 from app.weather.service import get_weather
@@ -157,6 +159,25 @@ def get_metar_endpoint(
     if result is None:
         raise HTTPException(status_code=404, detail="No METAR data for this station")
     return result
+
+
+@app.get("/advisory/agriculture")
+def agriculture_advisory_endpoint(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    crop: str | None = Query(None),
+    days: int = Query(5, ge=1, le=16),
+) -> dict:
+    return get_agriculture_advisory(lat, lon, crop=crop, days=days)
+
+
+@app.get("/advisory/urban")
+def urban_advisory_endpoint(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    days: int = Query(5, ge=1, le=16),
+) -> dict:
+    return get_urban_advisory(lat, lon, days=days)
 
 
 @app.post("/internal/ingest/marine", dependencies=[Depends(verify_internal_api_key)])
