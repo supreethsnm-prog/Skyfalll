@@ -53,8 +53,18 @@ TOOL_SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="list_alerts",
-        description="List all currently active disaster/weather alerts and warnings across India.",
-        input_schema={"type": "object", "properties": {}},
+        description=(
+            "List currently active disaster/weather alerts and warnings across India. "
+            "Pass latitude and longitude to filter to alerts within 100km of a specific "
+            "location; omit both to get all alerts nationwide."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "latitude": {"type": "number", "description": "Latitude in decimal degrees"},
+                "longitude": {"type": "number", "description": "Longitude in decimal degrees"},
+            },
+        },
     ),
     ToolSpec(
         name="list_pfz_zones",
@@ -87,8 +97,11 @@ _CHAT_TOOL_RESULT_CAP = 20
 
 def _handle_list_alerts(tool_input: dict) -> list[dict]:
     # Chat-context size limit, not a data-correctness truncation: the real
-    # /alerts endpoint (app/main.py) returns the full list.
-    return list_alerts()[:_CHAT_TOOL_RESULT_CAP]
+    # /alerts endpoint (app/main.py) returns the full, unfiltered list.
+    results = list_alerts(
+        latitude=tool_input.get("latitude"), longitude=tool_input.get("longitude")
+    )
+    return results[:_CHAT_TOOL_RESULT_CAP]
 
 
 def _handle_list_pfz_zones(tool_input: dict) -> list[dict]:

@@ -152,6 +152,36 @@ def test_execute_list_pfz_zones_strips_geometry(clean_pfz_zones):
     assert result[0]["sector_name"] == "test sector"
 
 
+def test_execute_list_alerts_filters_by_location(clean_alerts_table):
+    from app.ingestion.alerts import ingest_alerts
+    from app.providers.warning import AlertData
+    from tests.conftest import FakeWarningProvider
+
+    near = AlertData(
+        external_id="near-1", source="SACHET-SDMA", severity="Moderate", event_type="Flood",
+        area_description="Mumbai", effective_start_time=None, effective_end_time=None,
+        warning_message=None, severity_color=None, latitude=19.06, longitude=72.88,
+        raw_payload={},
+    )
+    far = AlertData(
+        external_id="far-1", source="SACHET-SDMA", severity="Moderate", event_type="Flood",
+        area_description="Delhi", effective_start_time=None, effective_end_time=None,
+        warning_message=None, severity_color=None, latitude=28.6, longitude=77.2,
+        raw_payload={},
+    )
+    ingest_alerts(FakeWarningProvider([near, far]))
+
+    result_json = execute_tool("list_alerts", {"latitude": 19.05, "longitude": 72.87})
+    result = json.loads(result_json)
+
+    assert [r["external_id"] for r in result] == ["near-1"]
+
+
+def test_tool_specs_list_alerts_declares_location_parameters():
+    spec = next(s for s in TOOL_SPECS if s.name == "list_alerts")
+    assert set(spec.input_schema["properties"]) == {"latitude", "longitude"}
+
+
 def test_execute_list_pfz_zones_caps_result_to_20(monkeypatch):
     import app.chat.tools as tools_module
 
