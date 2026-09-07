@@ -10,6 +10,7 @@ the LLM can only ever learn a fact through one of these, never invent one.
 import json
 
 from app.aviation.service import get_metar
+from app.forecast.service import get_forecast
 from app.geocoding.service import geocode_place
 from app.marine.service import list_pfz_zones
 from app.providers.llm import ToolSpec
@@ -25,6 +26,27 @@ TOOL_SPECS: list[ToolSpec] = [
             "properties": {
                 "latitude": {"type": "number", "description": "Latitude in decimal degrees"},
                 "longitude": {"type": "number", "description": "Longitude in decimal degrees"},
+            },
+            "required": ["latitude", "longitude"],
+        },
+    ),
+    ToolSpec(
+        name="get_forecast",
+        description=(
+            "Get a multi-day weather forecast (daily high/low temperature, rain "
+            "probability, precipitation, wind) for a specific latitude/longitude "
+            "coordinate. Use this for questions about tomorrow, upcoming days, or "
+            "the weekly forecast — get_weather only covers right now."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "latitude": {"type": "number", "description": "Latitude in decimal degrees"},
+                "longitude": {"type": "number", "description": "Longitude in decimal degrees"},
+                "days": {
+                    "type": "integer",
+                    "description": "Number of days to forecast (1-16, default 5)",
+                },
             },
             "required": ["latitude", "longitude"],
         },
@@ -88,6 +110,13 @@ def _handle_get_weather(tool_input: dict) -> dict:
     return get_weather(latitude=tool_input["latitude"], longitude=tool_input["longitude"])
 
 
+def _handle_get_forecast(tool_input: dict) -> list[dict]:
+    days = tool_input.get("days", 5)
+    return get_forecast(
+        latitude=tool_input["latitude"], longitude=tool_input["longitude"], days=days
+    )
+
+
 def _handle_geocode(tool_input: dict) -> dict:
     result = geocode_place(tool_input["query"])
     if result is None:
@@ -128,6 +157,7 @@ def _handle_list_pfz_zones(tool_input: dict) -> list[dict]:
 
 _HANDLERS = {
     "get_weather": _handle_get_weather,
+    "get_forecast": _handle_get_forecast,
     "geocode": _handle_geocode,
     "get_metar": _handle_get_metar,
     "list_alerts": _handle_list_alerts,

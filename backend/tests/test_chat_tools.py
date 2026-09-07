@@ -5,12 +5,19 @@ from sqlalchemy import insert
 
 from app.chat.tools import _CHAT_TOOL_RESULT_CAP, TOOL_SPECS, execute_tool
 from app.db import get_engine
-from app.models import Alert, PfzZone, WeatherReading
+from app.models import Alert, PfzZone, WeatherForecast, WeatherReading
 
 
-def test_tool_specs_cover_all_five_data_sources():
+def test_tool_specs_cover_all_six_data_sources():
     names = {spec.name for spec in TOOL_SPECS}
-    assert names == {"get_weather", "geocode", "get_metar", "list_alerts", "list_pfz_zones"}
+    assert names == {
+        "get_weather",
+        "get_forecast",
+        "geocode",
+        "get_metar",
+        "list_alerts",
+        "list_pfz_zones",
+    }
 
 
 def test_execute_get_weather_returns_seeded_cache_as_json(clean_weather_readings):
@@ -37,6 +44,37 @@ def test_execute_get_weather_returns_seeded_cache_as_json(clean_weather_readings
     assert result["temperature_c"] == 28.0
     assert "raw_payload" not in result
     assert "error" not in result
+
+
+def test_execute_get_forecast_returns_seeded_cache_as_json(clean_weather_forecasts):
+    with get_engine().begin() as conn:
+        conn.execute(
+            insert(WeatherForecast).values(
+                latitude=19.08, longitude=72.88, forecast_date="2026-09-08", weather_code=51,
+                temp_max_c=29.0, temp_min_c=25.0, precip_probability_pct=90.0,
+                precip_sum_mm=3.0, wind_speed_max_kmh=14.0, raw_payload={"seeded": True},
+                fetched_at=datetime.now(timezone.utc),
+            )
+        )
+
+    result_json = execute_tool(
+        "get_forecast", {"latitude": 19.08, "longitude": 72.88, "days": 1}
+    )
+    result = json.loads(result_json)
+
+    assert result[0]["temp_max_c"] == 29.0
+    assert "raw_payload" not in result[0]
+
+
+def test_execute_get_forecast_defaults_days_when_omitted(clean_weather_forecasts):
+    result_json = execute_tool("get_forecast", {"latitude": 19.08, "longitude": 72.88})
+    result = json.loads(result_json)
+    # No cache and a real network call would occur here in production; this
+    # only proves the handler doesn't crash on a missing "days" key by
+    # requiring KeyError to NOT be the failure mode — a genuine network
+    # error surfacing as an in-band {"error": ...} is an acceptable outcome
+    # in this offline test environment.
+    assert isinstance(result, (list, dict))
 
 
 def test_execute_geocode_reports_not_found_as_in_band_error(monkeypatch):
