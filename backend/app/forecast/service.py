@@ -93,6 +93,16 @@ def get_forecast(
                 rounded_lon,
                 max(r["fetched_at"] for r in rows),
             )
+            if len(rows) < days:
+                logger.warning(
+                    "Live forecast fetch failed for (%s, %s) and only %d of %d "
+                    "requested days are available in the stale cache; "
+                    "returning a partial result",
+                    rounded_lat,
+                    rounded_lon,
+                    len(rows),
+                    days,
+                )
             return [_to_response(row) for row in rows[:days]]
         raise
 

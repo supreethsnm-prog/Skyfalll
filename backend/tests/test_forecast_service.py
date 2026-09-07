@@ -97,6 +97,48 @@ def test_get_forecast_rounds_coordinates_for_cache_key(clean_weather_forecasts):
     assert len(rows) == 1
 
 
+class _RaisingForecastProvider:
+    def fetch_forecast(self, latitude, longitude, days):
+        raise RuntimeError("provider unavailable")
+
+
+def test_get_forecast_falls_back_to_full_stale_cache_on_provider_error(clean_weather_forecasts):
+    stale_time = datetime.now(timezone.utc) - timedelta(minutes=30)
+    with get_engine().begin() as conn:
+        for forecast_date, temp_max_c in (("2026-09-08", 20.0), ("2026-09-09", 21.0)):
+            conn.execute(
+                insert(WeatherForecast).values(
+                    latitude=19.08, longitude=72.88, forecast_date=forecast_date, weather_code=51,
+                    temp_max_c=temp_max_c, temp_min_c=15.0, precip_probability_pct=50.0,
+                    precip_sum_mm=1.0, wind_speed_max_kmh=10.0, raw_payload={"stale": True},
+                    fetched_at=stale_time,
+                )
+            )
+
+    result = get_forecast(19.08, 72.88, days=2, provider=_RaisingForecastProvider())
+
+    assert len(result) == 2
+    assert {r["forecast_date"] for r in result} == {"2026-09-08", "2026-09-09"}
+
+
+def test_get_forecast_falls_back_to_partial_stale_cache_on_provider_error(clean_weather_forecasts):
+    stale_time = datetime.now(timezone.utc) - timedelta(minutes=30)
+    with get_engine().begin() as conn:
+        conn.execute(
+            insert(WeatherForecast).values(
+                latitude=19.08, longitude=72.88, forecast_date="2026-09-08", weather_code=51,
+                temp_max_c=20.0, temp_min_c=15.0, precip_probability_pct=50.0,
+                precip_sum_mm=1.0, wind_speed_max_kmh=10.0, raw_payload={"stale": True},
+                fetched_at=stale_time,
+            )
+        )
+
+    result = get_forecast(19.08, 72.88, days=3, provider=_RaisingForecastProvider())
+
+    assert len(result) == 1
+    assert result[0]["forecast_date"] == "2026-09-08"
+
+
 def test_get_forecast_upserts_multiple_days_without_duplicating(clean_weather_forecasts):
     day1 = _sample_day(forecast_date="2026-09-08", temp_max_c=29.0)
     day2 = _sample_day(forecast_date="2026-09-09", temp_max_c=30.0)
