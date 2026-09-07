@@ -83,3 +83,5 @@ def test_voice_chat_returns_transcript_even_if_reply_is_empty():
 
     assert result["transcript"] == "silence test"
     assert result["reply_text"] == ""
+    assert tts.calls == []
+    assert result["reply_audio_base64"] == ""

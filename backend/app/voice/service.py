@@ -46,5 +46,6 @@ def voice_chat(
     finally:
         if owns_stt and hasattr(stt, "close"):
             stt.close()
+        # Defensive: if a future refactor shares one instance across both roles when neither is injected, don't double-close.
         if owns_tts and tts is not stt and hasattr(tts, "close"):
             tts.close()
