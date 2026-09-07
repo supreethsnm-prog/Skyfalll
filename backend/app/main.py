@@ -1,10 +1,11 @@
+import base64
 import json
 import logging
 from collections.abc import Generator
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -17,11 +18,14 @@ from app.geocoding.service import geocode_place
 from app.ingestion.alerts import ingest_alerts
 from app.ingestion.marine import ingest_pfz_zones
 from app.marine import service as marine_service
+from app.providers.bhashini import BhashiniSpeechProvider
 from app.providers.factory import build_llm_provider
 from app.providers.incois import INCOISMarineProvider
 from app.providers.llm import LLMProvider
 from app.providers.sachet import SACHETWarningProvider
+from app.providers.speech import SpeechToTextProvider, TextToSpeechProvider
 from app.scheduler import IngestionScheduler
+from app.voice.service import voice_chat
 from app.warning import service as warning_service
 from app.weather.service import get_weather
 
@@ -215,3 +219,85 @@ def chat_endpoint(
         raise HTTPException(
             status_code=503, detail="The LLM provider is temporarily unavailable. Please try again shortly."
         ) from e
+
+
+_STATIC_VOICE_LANGUAGES = [
+    {"code": "as", "name": "Assamese"}, {"code": "bn", "name": "Bengali"},
+    {"code": "brx", "name": "Bodo"}, {"code": "doi", "name": "Dogri"},
+    {"code": "en", "name": "English"}, {"code": "gom", "name": "Konkani"},
+    {"code": "gu", "name": "Gujarati"}, {"code": "hi", "name": "Hindi"},
+    {"code": "kn", "name": "Kannada"}, {"code": "ks", "name": "Kashmiri"},
+    {"code": "mai", "name": "Maithili"}, {"code": "ml", "name": "Malayalam"},
+    {"code": "mni", "name": "Manipuri"}, {"code": "mr", "name": "Marathi"},
+    {"code": "ne", "name": "Nepali"}, {"code": "or", "name": "Odia"},
+    {"code": "pa", "name": "Punjabi"}, {"code": "sa", "name": "Sanskrit"},
+    {"code": "sat", "name": "Santali"}, {"code": "sd", "name": "Sindhi"},
+    {"code": "ta", "name": "Tamil"}, {"code": "te", "name": "Telugu"},
+    {"code": "ur", "name": "Urdu"},
+]
+
+
+@app.get("/voice/languages")
+def voice_languages_endpoint() -> dict:
+    return {"languages": _STATIC_VOICE_LANGUAGES, "count": len(_STATIC_VOICE_LANGUAGES)}
+
+
+def get_stt_provider() -> Generator[SpeechToTextProvider, None, None]:
+    try:
+        provider = BhashiniSpeechProvider()
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    try:
+        yield provider
+    finally:
+        provider.close()
+
+
+def get_tts_provider() -> Generator[TextToSpeechProvider, None, None]:
+    try:
+        provider = BhashiniSpeechProvider()
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    try:
+        yield provider
+    finally:
+        provider.close()
+
+
+def _require_wav_upload(audio: UploadFile = File(...)) -> UploadFile:
+    # A dedicated Depends (rather than a check in the endpoint body) so this
+    # validation runs, and can reject the request, before the get_stt_provider/
+    # get_tts_provider dependencies below are even evaluated — otherwise a bad
+    # upload would surface as a 503 (BHASHINI not configured) instead of a 422,
+    # since FastAPI only calls the endpoint body after every Depends succeeds.
+    if not (audio.content_type or "").endswith("wav") and not audio.filename.lower().endswith(".wav"):
+        raise HTTPException(
+            status_code=422,
+            detail="Only WAV audio is supported in this version. Convert your audio to WAV before uploading.",
+        )
+    return audio
+
+
+@app.post("/voice/chat")
+def voice_chat_endpoint(
+    audio: UploadFile = Depends(_require_wav_upload),
+    language: str = Form("hi"),
+    stt: SpeechToTextProvider = Depends(get_stt_provider),
+    tts: TextToSpeechProvider = Depends(get_tts_provider),
+    llm: LLMProvider = Depends(get_llm_provider),
+) -> dict:
+    audio_bytes = audio.file.read()
+    audio_base64 = base64.b64encode(audio_bytes).decode("ascii")
+    return voice_chat(
+        audio_base64=audio_base64,
+        audio_format="wav",
+        language=language,
+        stt_provider=stt,
+        tts_provider=tts,
+        # voice_chat's default chat_fn is chat_turn with no provider, which
+        # would build its own live LLM provider — bypassing the Depends seam
+        # entirely. Binding the Depends-provided `llm` here keeps /voice/chat
+        # consistent with /chat: both route through the same overridable
+        # get_llm_provider dependency, so tests can fake the LLM for either.
+        chat_fn=lambda message, history: chat_turn(message, history, provider=llm),
+    )
