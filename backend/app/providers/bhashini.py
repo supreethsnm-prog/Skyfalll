@@ -22,7 +22,7 @@ from app.providers.speech import SynthesisResult, TranscriptionResult
 
 BHASHINI_DISCOVERY_URL = "https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline"
 
-_ASR_AUDIO_FORMAT = "wav"
+_TTS_OUTPUT_AUDIO_FORMAT = "wav"
 _ASR_SAMPLING_RATE = 16000
 _TTS_GENDER = "female"
 
@@ -147,7 +147,7 @@ class BhashiniSpeechProvider:
         )
         payload = response.json()
         audio_content = payload["pipelineResponse"][0]["audio"][0]["audioContent"]
-        return SynthesisResult(audio_base64=audio_content, audio_format=_ASR_AUDIO_FORMAT, raw_payload=payload)
+        return SynthesisResult(audio_base64=audio_content, audio_format=_TTS_OUTPUT_AUDIO_FORMAT, raw_payload=payload)
 
     def close(self) -> None:
         if self._owns_client:

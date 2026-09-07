@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from app.config import get_settings
-from app.providers.bhashini import BhashiniSpeechProvider
+from app.providers.bhashini import BHASHINI_DISCOVERY_URL, BhashiniSpeechProvider
 
 _DISCOVERY_RESPONSE = {
     "pipelineResponseConfig": [
@@ -38,6 +38,7 @@ def _client_for(discovery_response, compute_response, capture=None):
         if "pipelineRequestConfig" in body:
             if capture is not None:
                 capture["discovery_request"] = body
+                capture["discovery_url"] = str(request.url)
                 capture["discovery_headers"] = dict(request.headers)
             return httpx.Response(200, json=discovery_response)
         if capture is not None:
@@ -85,7 +86,9 @@ def test_transcribe_performs_discovery_then_compute_with_dynamic_auth_header():
     assert result.text == "मुंबई में मौसम कैसा है"
     assert result.source_language == "hi"
 
-    # Discovery call used the fixed userID/ulcaApiKey headers.
+    # Discovery call went to the module's discovery URL and used the fixed
+    # userID/ulcaApiKey headers.
+    assert capture["discovery_url"] == BHASHINI_DISCOVERY_URL
     assert capture["discovery_headers"]["userid"] == "test-user"
     assert capture["discovery_headers"]["ulcaapikey"] == "test-key"
     assert capture["discovery_request"]["pipelineRequestConfig"]["pipelineId"] == "test-pipeline"
@@ -108,6 +111,12 @@ def test_synthesize_performs_discovery_then_compute():
 
     assert result.audio_base64 == "ZmFrZS13YXYtYnl0ZXM="
     assert result.audio_format == "wav"
+
+    # Same load-bearing assertions as the ASR path: the TTS compute call must
+    # also go to the discovery-provided callbackUrl and carry the DYNAMIC
+    # header name+value from the discovery response, never a hardcoded one.
+    assert capture["compute_url"] == "https://dhruva-api.bhashini.gov.in/services/inference/pipeline"
+    assert capture["compute_headers"]["x-compute-auth-key"] == "compute-secret-abc"
     assert capture["compute_request"]["pipelineTasks"][0]["config"]["serviceId"] == "tts-service-1"
     assert capture["compute_request"]["inputData"]["input"][0]["source"] == "मुंबई में आज बारिश होगी"
 
@@ -123,6 +132,32 @@ def test_transcribe_raises_on_discovery_http_error():
         provider.transcribe(audio_base64="ZmFrZQ==", audio_format="wav", language="hi")
 
 
+def test_transcribe_retries_discovery_on_transient_failure_then_succeeds(monkeypatch):
+    # The 400 test above cannot prove call_with_retries is wired in — 400 is not
+    # in _RETRYABLE_STATUS_CODES, so it re-raises immediately, exactly as a bare
+    # .post() would. A retryable 503 that then succeeds is what distinguishes
+    # "retries are wired in" from "they aren't".
+    monkeypatch.setattr("app.providers.retry.time.sleep", lambda s: None)
+    calls = {"discovery": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if "pipelineRequestConfig" in body:
+            calls["discovery"] += 1
+            if calls["discovery"] < 2:
+                return httpx.Response(503)
+            return httpx.Response(200, json=_DISCOVERY_RESPONSE)
+        return httpx.Response(200, json=_ASR_COMPUTE_RESPONSE)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    provider = BhashiniSpeechProvider(user_id="u", inference_key="k", pipeline_id="p", client=client)
+
+    result = provider.transcribe(audio_base64="ZmFrZQ==", audio_format="wav", language="hi")
+
+    assert result.text == "मुंबई में मौसम कैसा है"
+    assert calls["discovery"] == 2
+
+
 def test_close_only_closes_self_owned_client():
     client = _client_for(_DISCOVERY_RESPONSE, _ASR_COMPUTE_RESPONSE)
     provider = BhashiniSpeechProvider(user_id="u", inference_key="k", pipeline_id="p", client=client)
@@ -131,3 +166,8 @@ def test_close_only_closes_self_owned_client():
 
     provider2 = BhashiniSpeechProvider(user_id="u", inference_key="k", pipeline_id="p")
     assert provider2._owns_client is True
+    assert provider2._client.is_closed is False
+
+    provider2.close()
+
+    assert provider2._client.is_closed is True
