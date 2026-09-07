@@ -182,6 +182,37 @@ def test_tool_specs_list_alerts_declares_location_parameters():
     assert set(spec.input_schema["properties"]) == {"latitude", "longitude"}
 
 
+def test_execute_list_pfz_zones_filters_by_location(clean_pfz_zones):
+    from app.ingestion.marine import ingest_pfz_zones
+    from app.providers.marine import PfzZoneData
+    from tests.conftest import _FakeMarineProvider
+
+    near = PfzZoneData(
+        external_id="near-1", category=None, sector_boundary=None, sector_name=None,
+        julian_day=None, serial_number=None, year=None, uid=None, length_km=None,
+        geometry={"type": "MultiLineString", "coordinates": [[[72.88, 19.06], [72.90, 19.08]]]},
+        raw_payload={},
+    )
+    far = PfzZoneData(
+        external_id="far-1", category=None, sector_boundary=None, sector_name=None,
+        julian_day=None, serial_number=None, year=None, uid=None, length_km=None,
+        geometry={"type": "MultiLineString", "coordinates": [[[77.2, 28.6], [77.3, 28.7]]]},
+        raw_payload={},
+    )
+    ingest_pfz_zones(_FakeMarineProvider([near, far]))
+
+    result_json = execute_tool("list_pfz_zones", {"latitude": 19.05, "longitude": 72.87})
+    result = json.loads(result_json)
+
+    assert [r["external_id"] for r in result] == ["near-1"]
+    assert "geometry" not in result[0]
+
+
+def test_tool_specs_list_pfz_zones_declares_location_parameters():
+    spec = next(s for s in TOOL_SPECS if s.name == "list_pfz_zones")
+    assert set(spec.input_schema["properties"]) == {"latitude", "longitude"}
+
+
 def test_execute_list_pfz_zones_caps_result_to_20(monkeypatch):
     import app.chat.tools as tools_module
 
@@ -189,7 +220,7 @@ def test_execute_list_pfz_zones_caps_result_to_20(monkeypatch):
         {"external_id": f"zone-{i}", "geometry": {"type": "MultiLineString", "coordinates": []}}
         for i in range(25)
     ]
-    monkeypatch.setattr(tools_module, "list_pfz_zones", lambda: fake_zones)
+    monkeypatch.setattr(tools_module, "list_pfz_zones", lambda **kwargs: fake_zones)
 
     result_json = execute_tool("list_pfz_zones", {})
     result = json.loads(result_json)

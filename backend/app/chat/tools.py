@@ -68,8 +68,18 @@ TOOL_SPECS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="list_pfz_zones",
-        description="List all currently advised marine Potential Fishing Zones (PFZ).",
-        input_schema={"type": "object", "properties": {}},
+        description=(
+            "List currently advised marine Potential Fishing Zones (PFZ). Pass latitude "
+            "and longitude to filter to zones within 200km of a specific coastal location; "
+            "omit both to get all zones nationwide."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "latitude": {"type": "number", "description": "Latitude in decimal degrees"},
+                "longitude": {"type": "number", "description": "Longitude in decimal degrees"},
+            },
+        },
     ),
 ]
 
@@ -110,7 +120,9 @@ def _handle_list_pfz_zones(tool_input: dict) -> list[dict]:
     # which zones are active, and the full MultiLineString arrays risk
     # crowding out max_tokens. The real /marine/pfz-zones endpoint (app/main.py)
     # deliberately keeps geometry — this only affects the chat tool handler.
-    zones = list_pfz_zones()[:_CHAT_TOOL_RESULT_CAP]
+    zones = list_pfz_zones(
+        latitude=tool_input.get("latitude"), longitude=tool_input.get("longitude")
+    )[:_CHAT_TOOL_RESULT_CAP]
     return [{k: v for k, v in zone.items() if k != "geometry"} for zone in zones]
 
 
