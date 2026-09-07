@@ -41,10 +41,12 @@ def test_lifespan_does_not_start_scheduler_when_disabled(monkeypatch):
     mock_start = MagicMock()
     monkeypatch.setattr("app.main.IngestionScheduler.start", mock_start)
 
-    _run_lifespan_once()
+    try:
+        _run_lifespan_once()
 
-    mock_start.assert_not_called()
-    get_settings.cache_clear()
+        mock_start.assert_not_called()
+    finally:
+        get_settings.cache_clear()
 
 
 def test_lifespan_starts_scheduler_when_enabled(monkeypatch):
@@ -55,14 +57,16 @@ def test_lifespan_starts_scheduler_when_enabled(monkeypatch):
     monkeypatch.setattr("app.main.IngestionScheduler.start", mock_start)
     monkeypatch.setattr("app.main.IngestionScheduler.stop", mock_stop)
 
-    _run_lifespan_once()
+    try:
+        _run_lifespan_once()
 
-    mock_start.assert_called_once()
-    jobs = mock_start.call_args[0][0]
-    job_names = {job[0] for job in jobs}
-    assert job_names == {"alerts", "marine"}
-    mock_stop.assert_called_once()
-    get_settings.cache_clear()
+        mock_start.assert_called_once()
+        jobs = mock_start.call_args[0][0]
+        job_names = {job[0] for job in jobs}
+        assert job_names == {"alerts", "marine"}
+        mock_stop.assert_called_once()
+    finally:
+        get_settings.cache_clear()
 
 
 def test_lifespan_uses_configured_intervals(monkeypatch):
@@ -74,10 +78,12 @@ def test_lifespan_uses_configured_intervals(monkeypatch):
     monkeypatch.setattr("app.main.IngestionScheduler.start", mock_start)
     monkeypatch.setattr("app.main.IngestionScheduler.stop", MagicMock())
 
-    _run_lifespan_once()
+    try:
+        _run_lifespan_once()
 
-    jobs = mock_start.call_args[0][0]
-    intervals = {name: interval for name, _fn, interval in jobs}
-    assert intervals["alerts"] == 123
-    assert intervals["marine"] == 456
-    get_settings.cache_clear()
+        jobs = mock_start.call_args[0][0]
+        intervals = {name: interval for name, _fn, interval in jobs}
+        assert intervals["alerts"] == 123
+        assert intervals["marine"] == 456
+    finally:
+        get_settings.cache_clear()

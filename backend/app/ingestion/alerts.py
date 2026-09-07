@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db import get_engine
@@ -16,6 +16,12 @@ _IMMUTABLE_COLUMNS = {"id", "external_id"}
 _UPSERT_COLUMNS = tuple(
     col.name for col in Alert.__table__.columns if col.name not in _IMMUTABLE_COLUMNS
 )
+
+# Arbitrary but stable integer — must stay unique across every
+# pg_advisory_xact_lock() key used anywhere in this app, so concurrent
+# calls to THIS function serialize with each other without accidentally
+# colliding with a different job's lock.
+_INGEST_ALERTS_LOCK_KEY = 727001
 
 
 def ingest_alerts(provider: WarningProvider) -> int:
@@ -30,8 +36,11 @@ def ingest_alerts(provider: WarningProvider) -> int:
         return 0
 
     fetched_external_ids = {alert.external_id for alert in alerts}
+    fetched_sources = {alert.source for alert in alerts}
     fetched_at = datetime.now(timezone.utc)
     with get_engine().begin() as conn:
+        conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _INGEST_ALERTS_LOCK_KEY})
+
         for alert in alerts:
             stmt = pg_insert(Alert).values(
                 external_id=alert.external_id,
@@ -57,6 +66,20 @@ def ingest_alerts(provider: WarningProvider) -> int:
         # Reconciliation: the feed is authoritative for what's currently
         # active — a row whose external_id wasn't in this fetch has been
         # resolved/expired upstream and is no longer active.
-        conn.execute(delete(Alert).where(Alert.external_id.notin_(fetched_external_ids)))
+        #
+        # Scoped by source, not just by external_id: SACHET's provider
+        # concatenates two independent endpoints (SDMA, IMD-NOWCAST) into
+        # one list, and each has pre-existing leniency that can silently
+        # degrade to zero rows for just ONE of them without the overall
+        # fetch being empty. Reconciling only within the sources that
+        # actually contributed rows this cycle means a degraded endpoint's
+        # existing rows are left untouched (same protective posture as the
+        # whole-fetch empty-guard above, applied per source).
+        conn.execute(
+            delete(Alert).where(
+                Alert.source.in_(fetched_sources),
+                Alert.external_id.notin_(fetched_external_ids),
+            )
+        )
 
     return len(alerts)

@@ -49,4 +49,6 @@ class IngestionScheduler:
         self._stop_event.set()
         for thread in self._threads:
             thread.join(timeout=5.0)
+            if thread.is_alive():
+                logger.warning("Scheduler thread %s did not stop within the join timeout", thread.name)
         self._threads = []

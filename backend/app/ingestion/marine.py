@@ -9,7 +9,7 @@ patterns used elsewhere in this codebase.
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db import get_engine
@@ -23,6 +23,12 @@ _UPSERT_COLUMNS = tuple(
     col.name for col in PfzZone.__table__.columns if col.name not in _IMMUTABLE_COLUMNS
 )
 
+# Arbitrary but stable integer — must stay unique across every
+# pg_advisory_xact_lock() key used anywhere in this app, so concurrent
+# calls to THIS function serialize with each other without accidentally
+# colliding with a different job's lock.
+_INGEST_MARINE_LOCK_KEY = 727002
+
 
 def ingest_pfz_zones(provider: MarineProvider) -> int:
     zones = provider.fetch_pfz_zones()
@@ -33,6 +39,8 @@ def ingest_pfz_zones(provider: MarineProvider) -> int:
     fetched_external_ids = {zone.external_id for zone in zones}
     fetched_at = datetime.now(timezone.utc)
     with get_engine().begin() as conn:
+        conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _INGEST_MARINE_LOCK_KEY})
+
         for zone in zones:
             stmt = pg_insert(PfzZone).values(
                 external_id=zone.external_id,
