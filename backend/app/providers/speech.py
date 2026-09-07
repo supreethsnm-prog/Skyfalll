@@ -17,7 +17,12 @@ class SynthesisResult:
 
 
 class SpeechToTextProvider(Protocol):
-    def transcribe(self, audio_base64: str, audio_format: str, language: str) -> TranscriptionResult: ...
+    # sampling_rate is optional with a 16000 default so existing callers (and
+    # test fakes) that predate it keep working unchanged; callers that know the
+    # real rate of the audio they hold should always pass it.
+    def transcribe(
+        self, audio_base64: str, audio_format: str, language: str, sampling_rate: int = 16000
+    ) -> TranscriptionResult: ...
 
 
 class TextToSpeechProvider(Protocol):

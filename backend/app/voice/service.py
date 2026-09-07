@@ -19,6 +19,7 @@ def voice_chat(
     audio_format: str,
     language: str,
     history: list[dict] | None = None,
+    sampling_rate: int = 16000,
     stt_provider: SpeechToTextProvider | None = None,
     tts_provider: TextToSpeechProvider | None = None,
     chat_fn: Callable[..., dict] = chat_turn,
@@ -28,7 +29,12 @@ def voice_chat(
     stt = stt_provider or BhashiniSpeechProvider()
     tts = tts_provider or BhashiniSpeechProvider()
     try:
-        transcription = stt.transcribe(audio_base64=audio_base64, audio_format=audio_format, language=language)
+        transcription = stt.transcribe(
+            audio_base64=audio_base64,
+            audio_format=audio_format,
+            language=language,
+            sampling_rate=sampling_rate,
+        )
         chat_result = chat_fn(transcription.text, history)
         reply_text = chat_result["reply"]
 

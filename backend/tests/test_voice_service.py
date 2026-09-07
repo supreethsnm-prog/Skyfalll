@@ -6,9 +6,11 @@ class _FakeSTT:
     def __init__(self, result: TranscriptionResult):
         self._result = result
         self.calls = []
+        self.sampling_rates = []
 
-    def transcribe(self, audio_base64, audio_format, language):
+    def transcribe(self, audio_base64, audio_format, language, sampling_rate=16000):
         self.calls.append((audio_base64, audio_format, language))
+        self.sampling_rates.append(sampling_rate)
         return self._result
 
 

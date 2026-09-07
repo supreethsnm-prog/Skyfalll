@@ -1,8 +1,11 @@
 import base64
+import io
 import json
 import logging
+import wave
 from collections.abc import Generator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
@@ -264,7 +267,27 @@ def get_tts_provider() -> Generator[TextToSpeechProvider, None, None]:
         provider.close()
 
 
-def _require_wav_upload(audio: UploadFile = File(...)) -> UploadFile:
+# 10 MB — generous headroom for a 16kHz mono 16-bit WAV of several minutes
+# (~32 KB/s, so ~5 minutes), while still bounding how much a single request can
+# make the process read into memory and base64-encode.
+_MAX_AUDIO_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+@dataclass
+class _ValidatedAudio:
+    """What _require_wav_upload hands the endpoint.
+
+    A single Depends can only return one value, and the endpoint needs BOTH the
+    audio bytes and the sampling rate parsed out of them — hence a small
+    dataclass rather than returning the UploadFile and re-reading/reparsing it
+    in the endpoint body.
+    """
+
+    content: bytes
+    sampling_rate: int
+
+
+def _require_wav_upload(audio: UploadFile = File(...)) -> _ValidatedAudio:
     # A dedicated Depends (rather than a check in the endpoint body) so this
     # validation runs, and can reject the request, before the get_stt_provider/
     # get_tts_provider dependencies below are even evaluated — otherwise a bad
@@ -275,29 +298,78 @@ def _require_wav_upload(audio: UploadFile = File(...)) -> UploadFile:
             status_code=422,
             detail="Only WAV audio is supported in this version. Convert your audio to WAV before uploading.",
         )
-    return audio
+
+    # Checked BEFORE .read() — the point of a size limit is to avoid pulling an
+    # arbitrarily large body into memory, which reading first would defeat.
+    if audio.size is not None and audio.size > _MAX_AUDIO_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Audio file too large. Maximum size is 10MB.")
+
+    content = audio.file.read()
+    try:
+        with wave.open(io.BytesIO(content), "rb") as wav_file:
+            sampling_rate = wav_file.getframerate()
+    except (wave.Error, EOFError) as e:
+        # The filename/content-type check above is only a client-supplied hint;
+        # bytes that don't actually parse as RIFF/WAVE are the client's problem,
+        # so 422 rather than letting it explode as a 500 later.
+        raise HTTPException(status_code=422, detail="Uploaded file is not a valid WAV file.") from e
+
+    return _ValidatedAudio(content=content, sampling_rate=sampling_rate)
 
 
 @app.post("/voice/chat")
 def voice_chat_endpoint(
-    audio: UploadFile = Depends(_require_wav_upload),
+    validated_audio: _ValidatedAudio = Depends(_require_wav_upload),
     language: str = Form("hi"),
+    # Multipart form fields are strings, so history arrives JSON-encoded
+    # (json.dumps([...]) on the client) rather than as a parsed list the way
+    # /chat's JSON body delivers it.
+    history: str | None = Form(None),
     stt: SpeechToTextProvider = Depends(get_stt_provider),
     tts: TextToSpeechProvider = Depends(get_tts_provider),
     llm: LLMProvider = Depends(get_llm_provider),
 ) -> dict:
-    audio_bytes = audio.file.read()
-    audio_base64 = base64.b64encode(audio_bytes).decode("ascii")
-    return voice_chat(
-        audio_base64=audio_base64,
-        audio_format="wav",
-        language=language,
-        stt_provider=stt,
-        tts_provider=tts,
-        # voice_chat's default chat_fn is chat_turn with no provider, which
-        # would build its own live LLM provider — bypassing the Depends seam
-        # entirely. Binding the Depends-provided `llm` here keeps /voice/chat
-        # consistent with /chat: both route through the same overridable
-        # get_llm_provider dependency, so tests can fake the LLM for either.
-        chat_fn=lambda message, history: chat_turn(message, history, provider=llm),
-    )
+    # Deliberately a SEPARATE try/except from the voice_chat() call below: a
+    # client sending unparseable history JSON (422) and BHASHINI returning a
+    # malformed payload (502) are different faults, and folding them together
+    # would misattribute one as the other.
+    parsed_history = None
+    if history is not None:
+        try:
+            parsed_history = json.loads(history)
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid history: {e}") from e
+
+    audio_base64 = base64.b64encode(validated_audio.content).decode("ascii")
+    try:
+        return voice_chat(
+            audio_base64=audio_base64,
+            audio_format="wav",
+            language=language,
+            history=parsed_history,
+            sampling_rate=validated_audio.sampling_rate,
+            stt_provider=stt,
+            tts_provider=tts,
+            # voice_chat's default chat_fn is chat_turn with no provider, which
+            # would build its own live LLM provider — bypassing the Depends seam
+            # entirely. Binding the Depends-provided `llm` here keeps /voice/chat
+            # consistent with /chat: both route through the same overridable
+            # get_llm_provider dependency, so tests can fake the LLM for either.
+            chat_fn=lambda message, history: chat_turn(message, history, provider=llm),
+        )
+    except (KeyError, IndexError) as e:
+        # A malformed or truncated BHASHINI payload — e.g. the
+        # payload["pipelineResponse"][0]["output"][0]["source"] walk in
+        # BhashiniSpeechProvider.transcribe failing. The vendor's fault, not the
+        # client's, so 502 rather than 422.
+        raise HTTPException(
+            status_code=502, detail="The voice provider returned an invalid response. Please try again."
+        ) from e
+    except (httpx.HTTPStatusError, httpx.TransportError) as e:
+        # A transient failure that survived retry (see app/providers/retry.py,
+        # already wired into BhashiniSpeechProvider), or a non-retryable
+        # vendor-side error. Clean 503 instead of FastAPI's opaque default 500,
+        # without leaking the vendor's raw exception text to the client.
+        raise HTTPException(
+            status_code=503, detail="The voice provider is temporarily unavailable. Please try again shortly."
+        ) from e

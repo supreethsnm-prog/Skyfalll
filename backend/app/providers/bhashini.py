@@ -98,7 +98,13 @@ class BhashiniSpeechProvider:
             service_id=task_config["serviceId"],
         )
 
-    def transcribe(self, audio_base64: str, audio_format: str, language: str) -> TranscriptionResult:
+    def transcribe(
+        self,
+        audio_base64: str,
+        audio_format: str,
+        language: str,
+        sampling_rate: int = _ASR_SAMPLING_RATE,
+    ) -> TranscriptionResult:
         config = self._discover("asr", language)
         response = call_with_retries(
             lambda: self._client.post(
@@ -112,7 +118,12 @@ class BhashiniSpeechProvider:
                                 "language": {"sourceLanguage": language},
                                 "serviceId": config.service_id,
                                 "audioFormat": audio_format,
-                                "samplingRate": _ASR_SAMPLING_RATE,
+                                # The REAL sampling rate of the supplied audio.
+                                # Sending a wrong rate here does not fail loudly —
+                                # BHASHINI resamples against the number it is
+                                # told, so a mismatch silently degrades (or
+                                # garbles) the transcript instead of erroring.
+                                "samplingRate": sampling_rate,
                             },
                         }
                     ],
