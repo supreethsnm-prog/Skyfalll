@@ -1,9 +1,11 @@
 import json
+import logging
 from collections.abc import Generator
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app.aviation.service import get_metar
@@ -22,6 +24,8 @@ from app.providers.sachet import SACHETWarningProvider
 from app.scheduler import IngestionScheduler
 from app.warning import service as warning_service
 from app.weather.service import get_weather
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -57,6 +61,24 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="WeatherGPT Backend", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        origin.strip()
+        for origin in get_settings().cors_allowed_origins.split(",")
+        if origin.strip()
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    # allow_credentials is deliberately left at its default (False) — this
+    # API has no cookie-based auth, so there's nothing that needs it, and
+    # combining a wildcard origin with credentials is an invalid
+    # combination browsers reject outright (a real bug found in a
+    # different WeatherGPT implementation reviewed earlier in this
+    # project — this API avoids the whole category by using an explicit
+    # origin list AND not needing credentials at all).
+)
+
 
 @app.get("/health")
 def health() -> dict[str, str]:
@@ -69,7 +91,22 @@ def health_db() -> dict[str, str]:
     return {"status": "ok", "db": "connected"}
 
 
-@app.post("/internal/ingest/alerts")
+def verify_internal_api_key(
+    x_internal_api_key: str | None = Header(default=None, alias="X-Internal-API-Key"),
+) -> None:
+    settings = get_settings()
+    if not settings.internal_api_key:
+        logger.warning(
+            "INTERNAL_API_KEY is not set — /internal/ingest/* endpoints are "
+            "currently unauthenticated. Set it in backend/.env before any "
+            "real deployment or demo reachable by anyone else."
+        )
+        return
+    if x_internal_api_key != settings.internal_api_key:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Internal-API-Key header")
+
+
+@app.post("/internal/ingest/alerts", dependencies=[Depends(verify_internal_api_key)])
 def trigger_alert_ingestion() -> dict[str, int]:
     count = ingest_alerts(SACHETWarningProvider())
     return {"ingested": count}
@@ -115,7 +152,7 @@ def get_metar_endpoint(
     return result
 
 
-@app.post("/internal/ingest/marine")
+@app.post("/internal/ingest/marine", dependencies=[Depends(verify_internal_api_key)])
 def trigger_marine_ingestion() -> dict[str, int]:
     count = ingest_pfz_zones(INCOISMarineProvider())
     return {"ingested": count}
