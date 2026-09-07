@@ -272,3 +272,74 @@ def test_generate_raises_on_http_error():
     provider = GeminiLLMProvider(api_key="k", client=httpx.Client(transport=httpx.MockTransport(handler)))
     with pytest.raises(httpx.HTTPStatusError):
         provider.generate(system="s", history=[{"role": "user", "content": "x"}], tools=[])
+
+
+def test_same_name_parallel_tool_results_preserve_call_order():
+    """Gemini has no call ids — a functionResponse is matched to its
+    functionCall by name alone. When one turn calls the SAME tool twice
+    (e.g. "compare weather in Mumbai and Delhi"), both responses carry an
+    identical name, and disambiguation depends entirely on returning the
+    responses in the same order the calls were made.
+
+    Verified live against the real Gemini API during planning: prompting
+    gemini-2.5-flash to call get_weather for two different coordinates in
+    one turn produced two functionCall parts in a stable order, and
+    sending back functionResponse parts in that same order was correctly
+    attributed by the model (Mumbai's response was not swapped with
+    Delhi's). This test locks in the CODE-LEVEL half of that behavior:
+    _translate_history must never reorder tool-role history entries
+    relative to the order they were appended in.
+    """
+    capture: dict = {}
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(_TEXT_PAYLOAD, capture))
+
+    history = [
+        {"role": "user", "content": "Compare weather in Mumbai and Delhi"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "c1", "name": "get_weather", "input": {"latitude": 19.05, "longitude": 72.87}},
+                {"id": "c2", "name": "get_weather", "input": {"latitude": 28.6, "longitude": 77.2}},
+            ],
+        },
+        # Order matters: Mumbai's result must stay first, Delhi's second,
+        # even though both entries share the same tool name.
+        {"role": "tool", "tool_call_id": "c1", "name": "get_weather", "content": '{"temperature_c": 99.0}'},
+        {"role": "tool", "tool_call_id": "c2", "name": "get_weather", "content": '{"temperature_c": 11.0}'},
+    ]
+
+    provider.generate(system="s", history=history, tools=[])
+
+    contents = capture["body"]["contents"]
+    # Both functionCall parts land in the assistant/model turn, in request order.
+    model_turn = contents[1]
+    assert [p["functionCall"]["args"] for p in model_turn["parts"]] == [
+        {"latitude": 19.05, "longitude": 72.87},
+        {"latitude": 28.6, "longitude": 77.2},
+    ]
+    # Both functionResponse parts batch into one message, in the SAME order
+    # as the calls — this is the exact property Gemini relies on to
+    # disambiguate two identically-named results.
+    response_turn = contents[2]
+    responses = [p["functionResponse"]["response"] for p in response_turn["parts"]]
+    assert responses == [{"temperature_c": 99.0}, {"temperature_c": 11.0}]
+
+
+def test_synthesized_tool_call_ids_are_unique_across_generate_calls():
+    """A synthesized id that resets to gemini-0/gemini-1/... on every
+    generate() call would repeat across rounds of one conversation (round
+    1 and round 2 could both mint "gemini-0"). Nothing currently depends
+    on cross-round uniqueness (the server always attaches an explicit
+    "name" to tool-role entries, so the id->name fallback is never
+    consulted in practice) — but it's a latent trap for any future code
+    that correlates by tool-call id across a whole conversation, so ids
+    must be unique for the life of the process, not just within one call.
+    """
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(_TOOL_PAYLOAD))
+
+    turn1 = provider.generate(system="s", history=[{"role": "user", "content": "a"}], tools=[])
+    turn2 = provider.generate(system="s", history=[{"role": "user", "content": "b"}], tools=[])
+
+    ids_seen = {call.id for call in turn1.tool_calls} | {call.id for call in turn2.tool_calls}
+    assert len(ids_seen) == len(turn1.tool_calls) + len(turn2.tool_calls)
