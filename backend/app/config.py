@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"
     gemini_max_tokens: int = 1024
     llm_provider: str = "auto"
+    enable_scheduler: bool = False
+    alert_ingestion_interval_seconds: int = 300
+    marine_ingestion_interval_seconds: int = 86400
 
 
 @lru_cache

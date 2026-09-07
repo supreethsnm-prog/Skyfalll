@@ -1,5 +1,6 @@
 import json
 from collections.abc import Generator
+from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -7,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.aviation.service import get_metar
 from app.chat.service import chat_turn
+from app.config import get_settings
 from app.db import check_db_connection
 from app.forecast.service import get_forecast
 from app.geocoding.service import geocode_place
@@ -17,10 +19,43 @@ from app.providers.factory import build_llm_provider
 from app.providers.incois import INCOISMarineProvider
 from app.providers.llm import LLMProvider
 from app.providers.sachet import SACHETWarningProvider
+from app.scheduler import IngestionScheduler
 from app.warning import service as warning_service
 from app.weather.service import get_weather
 
-app = FastAPI(title="WeatherGPT Backend")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Must be an ASYNC context manager — Starlette's lifespan= parameter
+    # calls `async with lifespan_context(app)`, and a plain @contextmanager
+    # fails immediately (verified directly: "TypeError: '_GeneratorContextManager'
+    # object does not support the asynchronous context manager protocol").
+    # The body itself has nothing to await — IngestionScheduler.start()/stop()
+    # are synchronous, thread-based calls — but that doesn't change which
+    # protocol the object itself must implement.
+    settings = get_settings()
+    scheduler = IngestionScheduler()
+    if settings.enable_scheduler:
+        scheduler.start(
+            [
+                (
+                    "alerts",
+                    lambda: ingest_alerts(SACHETWarningProvider()),
+                    settings.alert_ingestion_interval_seconds,
+                ),
+                (
+                    "marine",
+                    lambda: ingest_pfz_zones(INCOISMarineProvider()),
+                    settings.marine_ingestion_interval_seconds,
+                ),
+            ]
+        )
+    yield
+    if settings.enable_scheduler:
+        scheduler.stop()
+
+
+app = FastAPI(title="WeatherGPT Backend", lifespan=lifespan)
 
 
 @app.get("/health")
