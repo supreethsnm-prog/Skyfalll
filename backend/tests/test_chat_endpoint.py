@@ -103,3 +103,52 @@ def test_chat_endpoint_returns_422_for_empty_message(override_llm):
     response = client.post("/chat", json={"message": ""})
 
     assert response.status_code == 422
+
+
+def test_chat_endpoint_returns_502_for_invalid_json_from_llm_provider(override_llm):
+    # A malformed/unparseable body from the LLM vendor must NOT be reported
+    # as "invalid history" (422) — that blames the client for a vendor-side
+    # failure. json.JSONDecodeError is a ValueError subclass, so this
+    # requires its own except clause ordered BEFORE the (KeyError, ValueError)
+    # one, or the broader clause would catch it first.
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"not valid json{{{")
+
+    mock_client = httpx.Client(transport=httpx.MockTransport(handler))
+    provider = AnthropicLLMProvider(api_key="test-key", client=mock_client)
+    override_llm(provider)
+
+    response = client.post("/chat", json={"message": "Hi"})
+
+    assert response.status_code == 502
+    assert "history" not in response.json()["detail"].lower()
+
+
+def test_chat_endpoint_returns_503_when_llm_provider_is_unavailable(override_llm, monkeypatch):
+    monkeypatch.setattr("app.providers.retry.time.sleep", lambda s: None)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503)
+
+    mock_client = httpx.Client(transport=httpx.MockTransport(handler))
+    provider = AnthropicLLMProvider(api_key="test-key", client=mock_client)
+    override_llm(provider)
+
+    response = client.post("/chat", json={"message": "Hi"})
+
+    assert response.status_code == 503
+
+
+def test_chat_endpoint_returns_503_on_connection_failure(override_llm, monkeypatch):
+    monkeypatch.setattr("app.providers.retry.time.sleep", lambda s: None)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    mock_client = httpx.Client(transport=httpx.MockTransport(handler))
+    provider = AnthropicLLMProvider(api_key="test-key", client=mock_client)
+    override_llm(provider)
+
+    response = client.post("/chat", json={"message": "Hi"})
+
+    assert response.status_code == 503

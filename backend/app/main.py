@@ -1,5 +1,7 @@
+import json
 from collections.abc import Generator
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -123,5 +125,21 @@ def chat_endpoint(
 ) -> dict:
     try:
         return chat_turn(request.message, request.history, provider=llm)
+    except json.JSONDecodeError as e:
+        # Must be caught before (KeyError, ValueError) below — JSONDecodeError
+        # is a ValueError subclass, and a malformed response FROM the LLM
+        # vendor is not the client's fault; misreporting it as "invalid
+        # history" would send a debugging effort in the wrong direction.
+        raise HTTPException(
+            status_code=502, detail="The LLM provider returned an invalid response. Please try again."
+        ) from e
     except (KeyError, ValueError) as e:
         raise HTTPException(status_code=422, detail=f"Invalid history: {e}") from e
+    except (httpx.HTTPStatusError, httpx.TransportError) as e:
+        # A transient failure that survived retry (see app/providers/retry.py),
+        # or a non-retryable vendor-side error. Report a clean 503 rather than
+        # FastAPI's opaque default 500, without leaking the vendor's raw
+        # exception text to the client.
+        raise HTTPException(
+            status_code=503, detail="The LLM provider is temporarily unavailable. Please try again shortly."
+        ) from e
