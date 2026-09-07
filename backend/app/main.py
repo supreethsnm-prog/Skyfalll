@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from app.aviation.service import get_metar
 from app.chat.service import chat_turn
 from app.db import check_db_connection
+from app.forecast.service import get_forecast
 from app.geocoding.service import geocode_place
 from app.ingestion.alerts import ingest_alerts
 from app.ingestion.marine import ingest_pfz_zones
@@ -48,6 +49,15 @@ def get_weather_endpoint(
     lon: float = Query(..., ge=-180, le=180),
 ) -> dict:
     return get_weather(lat, lon)
+
+
+@app.get("/forecast")
+def get_forecast_endpoint(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    days: int = Query(5, ge=1, le=16),
+) -> list[dict]:
+    return get_forecast(lat, lon, days)
 
 
 @app.get("/geocode")
