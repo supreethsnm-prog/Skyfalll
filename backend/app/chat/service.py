@@ -16,6 +16,7 @@ principle (WeatherGPT V1 design doc, section 1).
 """
 
 import logging
+import time
 
 from app.chat.tools import TOOL_SPECS, execute_tool
 from app.providers.factory import build_llm_provider
@@ -24,6 +25,14 @@ from app.providers.llm import LLMProvider
 logger = logging.getLogger(__name__)
 
 _MAX_TOOL_ITERATIONS = 5
+
+# A generous ceiling on total time this function can spend across every
+# generate()/tool-execution round in one request, even if _MAX_TOOL_ITERATIONS
+# hasn't been reached yet — bounds the worst case where retry.py's own
+# per-call backoff (up to ~95s per generate() call, see app/providers/retry.py)
+# would otherwise compose with this loop's iteration count into a multi-minute
+# hang instead of a fast, clear failure.
+_CHAT_TURN_DEADLINE_SECONDS = 60.0
 
 _SYSTEM_PROMPT = (
     "You are WeatherGPT, a conversational assistant for weather, marine, "
@@ -61,8 +70,20 @@ def chat_turn(
     try:
         conversation = list(history or [])
         conversation.append({"role": "user", "content": message})
+        start_time = time.monotonic()
 
         for _ in range(_MAX_TOOL_ITERATIONS):
+            if time.monotonic() - start_time > _CHAT_TURN_DEADLINE_SECONDS:
+                logger.warning(
+                    "Chat turn exceeded its %.0fs deadline before reaching a final answer",
+                    _CHAT_TURN_DEADLINE_SECONDS,
+                )
+                fallback_reply = (
+                    "That's taking longer than expected — please try again in a moment."
+                )
+                conversation.append({"role": "assistant", "content": fallback_reply})
+                return {"reply": fallback_reply, "history": conversation}
+
             turn = llm.generate(system=_SYSTEM_PROMPT, history=conversation, tools=TOOL_SPECS)
 
             if turn.stop_reason == "max_tokens":

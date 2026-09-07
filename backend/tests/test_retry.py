@@ -108,3 +108,21 @@ def test_honors_retry_after_header(monkeypatch):
     call_with_retries(lambda: client.get("http://test/"), base_delay_seconds=0.1)
 
     assert delays[0] >= 5.0
+
+
+def test_retry_after_header_delay_is_capped(monkeypatch):
+    # A vendor-supplied Retry-After can request an absurdly long delay (here,
+    # one hour). Against the old, uncapped code this would sleep for the full
+    # 3600s (since delay = max(computed_backoff, 3600.0) = 3600.0), so
+    # asserting the actual sleep stays within _MAX_DELAY_SECONDS fails on the
+    # old code and passes only once the delay is clamped.
+    delays = []
+    monkeypatch.setattr("app.providers.retry.time.sleep", lambda s: delays.append(s))
+    handler, calls = _counting_handler(
+        [httpx.Response(429, headers={"retry-after": "3600"}), httpx.Response(200, json={"ok": True})]
+    )
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    call_with_retries(lambda: client.get("http://test/"), base_delay_seconds=0.1)
+
+    assert delays[0] <= 30.0

@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 _DEFAULT_MAX_ATTEMPTS = 3
 _DEFAULT_BASE_DELAY_SECONDS = 1.0
+_MAX_DELAY_SECONDS = 30.0
 
 
 def call_with_retries(
@@ -52,6 +53,7 @@ def call_with_retries(
                         delay = max(delay, float(retry_after))
                     except ValueError:
                         pass
+            delay = min(delay, _MAX_DELAY_SECONDS)
             logger.warning(
                 "Transient LLM API failure (attempt %d/%d): %s — retrying in %.1fs",
                 attempt + 1,

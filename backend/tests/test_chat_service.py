@@ -114,3 +114,31 @@ def test_chat_turn_max_iterations_leaves_history_well_formed_for_a_followup():
     )
     second_result = chat_turn("and now?", history=history, provider=second_provider)
     assert second_result["reply"] == "All clear now."
+
+
+def test_chat_turn_returns_deadline_fallback_when_elapsed_time_exceeds_budget(monkeypatch):
+    # Simulate a deadline that has already elapsed before the loop even starts
+    # its first iteration, without needing to wait in real time. Against the
+    # old code (no deadline concept at all), this would just call generate()
+    # normally and return its answer instead of the "taking longer than
+    # expected" fallback.
+    monkeypatch.setattr("app.chat.service._CHAT_TURN_DEADLINE_SECONDS", 0.0)
+    provider = FakeLLMProvider([LLMTurn(text="Hello!", tool_calls=[], stop_reason="end_turn")])
+
+    result = chat_turn("Hi", provider=provider)
+
+    assert result["reply"] == "That's taking longer than expected — please try again in a moment."
+    assert provider.calls == []
+    assert result["history"][-1]["role"] == "assistant"
+    assert result["history"][-1]["content"] == result["reply"]
+
+
+def test_chat_turn_fast_completion_is_unaffected_by_deadline():
+    # A normal, fast-completing turn must never trip the deadline check
+    # (the default _CHAT_TURN_DEADLINE_SECONDS is left untouched here).
+    provider = FakeLLMProvider([LLMTurn(text="Hello!", tool_calls=[], stop_reason="end_turn")])
+
+    result = chat_turn("Hi", provider=provider)
+
+    assert result["reply"] == "Hello!"
+    assert len(provider.calls) == 1
