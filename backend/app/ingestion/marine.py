@@ -6,13 +6,17 @@ app/geocoding/service.py (permanent cache) for the two point-query
 patterns used elsewhere in this codebase.
 """
 
+import logging
 from datetime import datetime, timezone
 
+from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db import get_engine
 from app.models import PfzZone
 from app.providers.marine import MarineProvider
+
+logger = logging.getLogger(__name__)
 
 _IMMUTABLE_COLUMNS = {"id", "external_id"}
 _UPSERT_COLUMNS = tuple(
@@ -23,8 +27,10 @@ _UPSERT_COLUMNS = tuple(
 def ingest_pfz_zones(provider: MarineProvider) -> int:
     zones = provider.fetch_pfz_zones()
     if not zones:
+        logger.warning("INCOIS fetch_pfz_zones() returned zero zones — leaving existing rows untouched")
         return 0
 
+    fetched_external_ids = {zone.external_id for zone in zones}
     fetched_at = datetime.now(timezone.utc)
     with get_engine().begin() as conn:
         for zone in zones:
@@ -47,4 +53,7 @@ def ingest_pfz_zones(provider: MarineProvider) -> int:
                 set_={col: getattr(stmt.excluded, col) for col in _UPSERT_COLUMNS},
             )
             conn.execute(stmt)
+
+        conn.execute(delete(PfzZone).where(PfzZone.external_id.notin_(fetched_external_ids)))
+
     return len(zones)

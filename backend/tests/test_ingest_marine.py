@@ -46,3 +46,63 @@ def test_ingest_pfz_zones_upserts_existing_zone_by_external_id(clean_pfz_zones):
         ).fetchall()
     assert len(rows) == 1
     assert rows[0].sector_name == "East Coast"
+
+
+def test_ingest_pfz_zones_removes_zones_absent_from_the_latest_fetch(clean_pfz_zones):
+    stale_zone = PfzZoneData(
+        external_id="old-zone-1", category=None, sector_boundary=None, sector_name=None,
+        julian_day=None, serial_number=None, year=None, uid=None, length_km=None,
+        geometry={"type": "MultiLineString", "coordinates": [[[72.8, 19.0], [72.9, 19.1]]]},
+        raw_payload={},
+    )
+    ingest_pfz_zones(_FakeMarineProvider([stale_zone]))
+
+    with get_engine().connect() as conn:
+        rows = conn.execute(select(PfzZone)).mappings().all()
+    assert len(rows) == 1
+
+    current_zone = PfzZoneData(
+        external_id="current-zone-1", category=None, sector_boundary=None, sector_name=None,
+        julian_day=None, serial_number=None, year=None, uid=None, length_km=None,
+        geometry={"type": "MultiLineString", "coordinates": [[[73.0, 19.2], [73.1, 19.3]]]},
+        raw_payload={},
+    )
+    ingest_pfz_zones(_FakeMarineProvider([current_zone]))
+
+    with get_engine().connect() as conn:
+        rows = conn.execute(select(PfzZone)).mappings().all()
+    assert {r["external_id"] for r in rows} == {"current-zone-1"}
+
+
+def test_ingest_pfz_zones_keeps_zones_still_present_in_the_latest_fetch(clean_pfz_zones):
+    zone = PfzZoneData(
+        external_id="persistent-zone-1", category=None, sector_boundary=None, sector_name=None,
+        julian_day=None, serial_number=None, year=None, uid=None, length_km=None,
+        geometry={"type": "MultiLineString", "coordinates": [[[72.8, 19.0], [72.9, 19.1]]]},
+        raw_payload={},
+    )
+    ingest_pfz_zones(_FakeMarineProvider([zone]))
+    ingest_pfz_zones(_FakeMarineProvider([zone]))
+
+    with get_engine().connect() as conn:
+        rows = conn.execute(select(PfzZone)).mappings().all()
+    assert len(rows) == 1
+    assert rows[0].external_id == "persistent-zone-1"
+
+
+def test_ingest_pfz_zones_does_not_wipe_existing_rows_on_an_empty_fetch(clean_pfz_zones):
+    zone = PfzZoneData(
+        external_id="keep-me-zone-1", category=None, sector_boundary=None, sector_name=None,
+        julian_day=None, serial_number=None, year=None, uid=None, length_km=None,
+        geometry={"type": "MultiLineString", "coordinates": [[[72.8, 19.0], [72.9, 19.1]]]},
+        raw_payload={},
+    )
+    ingest_pfz_zones(_FakeMarineProvider([zone]))
+
+    count = ingest_pfz_zones(_FakeMarineProvider([]))
+
+    assert count == 0
+    with get_engine().connect() as conn:
+        rows = conn.execute(select(PfzZone)).mappings().all()
+    assert len(rows) == 1
+    assert rows[0].external_id == "keep-me-zone-1"
