@@ -134,8 +134,14 @@ def _crop_to_india(ds: xr.Dataset) -> xr.Dataset:
 
 
 def _clean(value: float) -> float | None:
-    """GRIB bitmap-masked points come back as NaN — store them as NULL."""
-    return None if math.isnan(value) else value
+    """GRIB bitmap-masked points come back as NaN — store them as NULL.
+
+    Checks isfinite rather than isnan so ±inf is mapped to NULL too: not
+    reachable from real GRIB2 data today, but an inf reaching a response
+    would raise in Starlette's JSONResponse (allow_nan=False) and surface
+    as an HTTP 500 on /nwp instead of a clean null.
+    """
+    return None if not math.isfinite(value) else value
 
 
 class NoaaGfsProvider:
@@ -243,10 +249,11 @@ class NoaaGfsProvider:
                 # Field absent at this forecast hour — skip it, not fatal
                 # (the storage columns are all nullable).
                 logger.warning(
-                    "GFS field %s:%s missing from %s f%03d index",
+                    "GFS field %s:%s missing from %s %sz f%03d index",
                     field.idx_param,
                     field.idx_level,
                     run_date,
+                    run_hour,
                     forecast_hour,
                 )
                 continue

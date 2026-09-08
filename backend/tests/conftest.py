@@ -1,5 +1,5 @@
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 
 from app.config import get_settings
 from app.db import get_engine
@@ -54,6 +54,13 @@ def reset_db_caches():
 
 def _truncate(model) -> None:
     with get_engine().begin() as conn:
+        # Fail fast instead of blocking indefinitely: a long-running writer
+        # transaction against the same table (a stray live-ingestion process,
+        # or a regression that reintroduces network I/O inside an open
+        # ingestion transaction) would otherwise hang fixture cleanup for
+        # minutes with no clear error. 5s is far longer than any normal
+        # truncate here takes.
+        conn.execute(text("SET LOCAL lock_timeout = '5s'"))
         conn.execute(delete(model))
 
 

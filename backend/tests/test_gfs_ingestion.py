@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+import pytest
 from sqlalchemy import insert, select
 
 from app.db import get_engine
@@ -81,3 +82,76 @@ def test_ingest_with_no_points_for_an_hour_does_not_crash(clean_gfs_forecast_poi
     provider = _FakeGfsProvider(points_by_hour={0: []})
     count = ingest_gfs_forecast(provider, forecast_hours=[0])
     assert count == 0
+
+
+def test_ingest_of_an_entirely_empty_fetch_leaves_existing_rows_untouched(
+    clean_gfs_forecast_points,
+):
+    # An empty fetch is indistinguishable from a provider-side bug, so
+    # reconciliation must NOT run and wholesale-delete the previous run.
+    with get_engine().begin() as conn:
+        conn.execute(
+            insert(GfsForecastPoint).values(
+                run_date="20260907", run_hour="18", forecast_hour=0,
+                valid_time=datetime(2026, 9, 7, 18, tzinfo=timezone.utc),
+                grid_latitude=19.0, grid_longitude=73.0,
+                temp_2m_c=25.0, fetched_at=datetime.now(timezone.utc),
+            )
+        )
+
+    provider = _FakeGfsProvider(run=("20260908", "00"), points_by_hour={})
+    assert ingest_gfs_forecast(provider, forecast_hours=[0, 24]) == 0
+
+    with get_engine().connect() as conn:
+        rows = conn.execute(select(GfsForecastPoint)).mappings().all()
+    assert len(rows) == 1
+    assert (rows[0]["run_date"], rows[0]["run_hour"]) == ("20260907", "18")
+
+
+def test_ingest_failure_partway_through_leaves_old_run_fully_intact(clean_gfs_forecast_points):
+    # Seed an OLDER run's data.
+    with get_engine().begin() as conn:
+        conn.execute(
+            insert(GfsForecastPoint).values(
+                run_date="20260907", run_hour="18", forecast_hour=0,
+                valid_time=datetime(2026, 9, 7, 18, tzinfo=timezone.utc),
+                grid_latitude=19.0, grid_longitude=73.0,
+                temp_2m_c=25.0, fetched_at=datetime.now(timezone.utc),
+            )
+        )
+        conn.execute(
+            insert(GfsForecastPoint).values(
+                run_date="20260907", run_hour="18", forecast_hour=24,
+                valid_time=datetime(2026, 9, 8, 18, tzinfo=timezone.utc),
+                grid_latitude=19.0, grid_longitude=73.0,
+                temp_2m_c=26.0, fetched_at=datetime.now(timezone.utc),
+            )
+        )
+
+    class _FailingProvider:
+        def __init__(self):
+            self.calls = 0
+
+        def discover_latest_run(self):
+            return ("20260908", "00")
+
+        def fetch_india_grid(self, run_date, run_hour, forecast_hour):
+            self.calls += 1
+            if self.calls == 3:
+                raise RuntimeError("simulated network failure on the 3rd forecast hour")
+            return [_point(forecast_hour=forecast_hour, run_date=run_date, run_hour=run_hour)]
+
+    provider = _FailingProvider()
+    with pytest.raises(RuntimeError, match="simulated network failure"):
+        ingest_gfs_forecast(provider, forecast_hours=[0, 24, 48, 72, 96, 120])
+
+    with get_engine().connect() as conn:
+        rows = conn.execute(select(GfsForecastPoint)).mappings().all()
+
+    # The OLD run must be 100% intact — not partially overwritten, not
+    # partially deleted, and there must be ZERO rows from the new
+    # (failed) run, even though 2 of its 6 forecast hours "succeeded"
+    # before the 3rd one raised.
+    assert len(rows) == 2
+    assert {(r["run_date"], r["run_hour"]) for r in rows} == {("20260907", "18")}
+    assert {r["temp_2m_c"] for r in rows} == {25.0, 26.0}
