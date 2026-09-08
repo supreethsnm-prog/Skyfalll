@@ -266,7 +266,7 @@ def nwp_forecast_endpoint(
 @app.get("/historical")
 def historical_weather_endpoint(
     location: str = Query(..., min_length=1),
-    date: str = Query(..., min_length=10, max_length=10),
+    date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
 ) -> dict:
     result = get_historical_weather(location, date)
     if result is None:

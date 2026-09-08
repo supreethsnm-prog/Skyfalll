@@ -25,6 +25,7 @@ takes 25 seconds to 2 minutes.
 
 import math
 import os
+import shutil
 import tempfile
 import zipfile
 
@@ -125,32 +126,38 @@ class CdsEra5Provider:
     ) -> Era5ReadingData:
         if zipfile.is_zipfile(path):
             extract_dir = tempfile.mkdtemp()
-            with zipfile.ZipFile(path) as z:
-                z.extractall(extract_dir)
-            members = [
-                os.path.join(extract_dir, name) for name in sorted(os.listdir(extract_dir))
-            ]
-        else:
-            extract_dir = None
-            members = [path]
-
-        try:
-            merged = self._load_and_merge(members)
-        finally:
-            if extract_dir is not None:
+            try:
+                with zipfile.ZipFile(path) as z:
+                    z.extractall(extract_dir)
+                members = [
+                    os.path.join(extract_dir, name) for name in sorted(os.listdir(extract_dir))
+                ]
+                merged = self._load_and_merge(members)
+            finally:
                 # Best-effort: on Windows a lingering HDF5 handle can keep a
                 # member locked, and a stale temp file is not worth failing a
-                # parse over.
-                import shutil
-
+                # parse over. mkdtemp() is inside this try/finally (not before
+                # it) so a corrupt/truncated zip raising during extraction
+                # doesn't leak the directory it already created.
                 shutil.rmtree(extract_dir, ignore_errors=True)
+        else:
+            members = [path]
+            merged = self._load_and_merge(members)
 
+        # NOTE: latitude/longitude below are the requested query point, not
+        # necessarily the actual ERA5 grid cell selected by nearest-neighbor
+        # lookup — the real grid cell can differ by up to ~0.25 degrees
+        # (~17-28km). See the same note on HistoricalWeatherReading in
+        # app/models.py.
         point = merged.sel(latitude=latitude, longitude=longitude, method="nearest")
 
         def _var(name: str) -> float | None:
             if name not in point:
                 return None
-            return _clean(point[name].values[0])
+            values = point[name].values.reshape(-1)
+            if values.size != 1:
+                raise ValueError(f"{name}: expected a single timestep, got {values.size}")
+            return _clean(values[0])
 
         t2m_k = _var("t2m")
         d2m_k = _var("d2m")
@@ -174,6 +181,8 @@ class CdsEra5Provider:
             observation_date=observation_date,
             temp_2m_c=(t2m_k - 273.15) if t2m_k is not None else None,
             dewpoint_2m_c=(d2m_k - 273.15) if d2m_k is not None else None,
+            # tp is a 1-hour accumulation ending at _OBSERVATION_TIME (not a
+            # daily sum) — see the module docstring's "Units are SI-raw" note.
             precip_mm=(tp_m * 1000) if tp_m is not None else None,
             wind_speed_10m_kmh=wind_speed_kmh,
             wind_direction_10m_deg=wind_direction_deg,
@@ -196,4 +205,7 @@ class CdsEra5Provider:
         return xr.merge(datasets, compat="override")
 
     def close(self) -> None:
-        pass  # ecmwf.datastores.Client has no explicit close/session to release
+        session = getattr(self._client, "session", None)  # None if _ensure_client was never called, or if a stub test client has no session attribute
+        if session is not None:
+            session.close()
+        self._client = None

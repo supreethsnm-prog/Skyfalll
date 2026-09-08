@@ -157,6 +157,12 @@ class HistoricalWeatherReading(Base):
 
     id = Column(Integer, primary_key=True)
     location_name = Column(String, nullable=False, index=True)
+    # latitude/longitude store the REQUESTED city's coordinate, not the actual
+    # ERA5 grid cell the reading was read from — nearest-neighbor grid
+    # snapping to ERA5's 0.25-degree grid means the real source cell can be up
+    # to ~0.25 degrees (~17-28km) away. Contrast with GfsForecastPoint above,
+    # which deliberately names its analogous columns grid_latitude/
+    # grid_longitude to avoid exactly this ambiguity.
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     observation_date = Column(String, nullable=False)

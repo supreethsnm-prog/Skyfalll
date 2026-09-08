@@ -39,3 +39,13 @@ def test_historical_endpoint_returns_404_with_helpful_message_for_unseeded_combi
     detail = response.json()["detail"]
     assert "Mumbai" in detail
     assert "2020-01-01" in detail
+
+
+def test_historical_endpoint_returns_422_for_a_malformed_date(clean_historical_weather_readings):
+    # M-8: length-only validation (min_length=10, max_length=10) accepted any
+    # 10-character string, producing a misleading 404 ("not in our coverage")
+    # for what is actually a malformed request. A regex pattern must reject
+    # this before it ever reaches the lookup.
+    response = client.get("/historical", params={"location": "Mumbai", "date": "not-a-date"})
+
+    assert response.status_code == 422

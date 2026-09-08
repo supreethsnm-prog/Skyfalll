@@ -4,6 +4,10 @@ historical_weather_readings — no live CDS call ever happens here, or
 anywhere in the request path (see this plan's Global Constraints).
 A miss (an unseeded location/date combination) is an expected, common
 outcome given the small fixed seed matrix, not an error.
+
+Note: `precip_mm` is ERA5's 1-hour accumulation ending at the 12:00 UTC
+observation time (not a daily total) — see `app/providers/era5.py` for the
+underlying request shape.
 """
 
 from sqlalchemy import func, select

@@ -1,10 +1,11 @@
+import os
 import shutil
 import tempfile
 import zipfile
 
 import pytest
 
-from app.providers.era5 import CdsEra5Provider
+from app.providers.era5 import CDS_URL, CdsEra5Provider
 
 FIXTURE = "tests/fixtures/era5_mumbai_sample.zip"
 
@@ -134,3 +135,74 @@ def test_fetch_reading_builds_the_expected_cds_request_and_parses_the_result():
     assert abs(reading.temp_2m_c - 27.30) < 0.01
     assert abs(reading.precip_mm - 0.73) < 0.01
     provider.close()
+
+
+def test_ensure_client_constructs_the_real_client_with_expected_kwargs_and_caches_it(monkeypatch):
+    # M-2: only the missing-key failure path had coverage before this test —
+    # the actual happy-path construction call (eds.Client(url=, key=)) was
+    # only ever exercised by a manual live smoke test. This monkeypatches
+    # ecmwf.datastores.Client itself (the exact name era5.py's `import
+    # ecmwf.datastores as eds; eds.Client(...)` resolves at call time) with a
+    # recorder, so no real network/import-time client construction happens.
+    import ecmwf.datastores as eds
+
+    from app.config import Settings, get_settings
+
+    captured_calls = []
+
+    class _RecordingClient:
+        def __init__(self, url=None, key=None, **kwargs):
+            captured_calls.append({"url": url, "key": key})
+
+    monkeypatch.setattr(eds, "Client", _RecordingClient)
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        "app.config.get_settings",
+        lambda: Settings(cds_api_key="test-key-123", _env_file=None),
+    )
+
+    provider = CdsEra5Provider()  # no explicit api_key -> falls back to get_settings()
+    client_first = provider._ensure_client()
+
+    assert len(captured_calls) == 1
+    assert captured_calls[0] == {"url": CDS_URL, "key": "test-key-123"}
+    assert isinstance(client_first, _RecordingClient)
+
+    # A second call must reuse the cached client (confirmed by reading
+    # _ensure_client: it only constructs when self._client is None), not
+    # construct a fresh one.
+    client_second = provider._ensure_client()
+    assert client_second is client_first
+    assert len(captured_calls) == 1
+
+    get_settings.cache_clear()
+
+
+def test_parse_response_removes_the_extraction_directory_even_on_success(monkeypatch):
+    # M-6: rmtree(ignore_errors=True) would silently swallow a FUTURE
+    # regression of the Windows HDF5-handle fix (a leaked directory with
+    # otherwise-correct parsed output triggers no test failure). This test
+    # pins the actual load-bearing property directly: the extraction
+    # directory must not survive _parse_response.
+    created_dirs = []
+    real_mkdtemp = tempfile.mkdtemp
+
+    def _spy_mkdtemp(*args, **kwargs):
+        path = real_mkdtemp(*args, **kwargs)
+        created_dirs.append(path)
+        return path
+
+    monkeypatch.setattr(tempfile, "mkdtemp", _spy_mkdtemp)
+
+    provider = CdsEra5Provider(client=None)
+    reading = provider._parse_response(
+        FIXTURE,
+        location_name="Mumbai",
+        latitude=19.08,
+        longitude=72.88,
+        observation_date="2023-07-15",
+    )
+
+    assert reading.temp_2m_c is not None
+    assert len(created_dirs) == 1
+    assert not os.path.exists(created_dirs[0])
