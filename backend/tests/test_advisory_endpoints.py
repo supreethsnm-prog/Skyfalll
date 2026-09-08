@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import insert
@@ -10,13 +10,21 @@ from app.models import WeatherForecast
 client = TestClient(app)
 
 
+def _future_forecast_date() -> str:
+    """Always ahead of ``date.today()``, which the real ``get_forecast`` filters
+    on — a hardcoded date would eventually stop matching and let the test fall
+    through to a live network call."""
+    return (date.today() + timedelta(days=1)).isoformat()
+
+
 def test_agriculture_advisory_endpoint_returns_structured_result(
     clean_weather_forecasts, clean_alerts_table
 ):
     with get_engine().begin() as conn:
         conn.execute(
             insert(WeatherForecast).values(
-                latitude=19.08, longitude=72.88, forecast_date="2026-09-08", weather_code=65,
+                latitude=19.08, longitude=72.88, forecast_date=_future_forecast_date(),
+                weather_code=65,
                 temp_max_c=32.0, temp_min_c=25.0, precip_probability_pct=95.0,
                 precip_sum_mm=80.0, wind_speed_max_kmh=20.0, raw_payload={"seeded": True},
                 fetched_at=datetime.now(timezone.utc),
@@ -49,7 +57,8 @@ def test_urban_advisory_endpoint_returns_risk_summary(clean_weather_forecasts, c
     with get_engine().begin() as conn:
         conn.execute(
             insert(WeatherForecast).values(
-                latitude=19.08, longitude=72.88, forecast_date="2026-09-08", weather_code=95,
+                latitude=19.08, longitude=72.88, forecast_date=_future_forecast_date(),
+                weather_code=95,
                 temp_max_c=46.0, temp_min_c=30.0, precip_probability_pct=95.0,
                 precip_sum_mm=150.0, wind_speed_max_kmh=70.0, raw_payload={"seeded": True},
                 fetched_at=datetime.now(timezone.utc),
