@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import io
 import json
@@ -40,7 +41,7 @@ from app.providers.incois import INCOISMarineProvider
 from app.providers.llm import LLMProvider
 from app.providers.sachet import SACHETWarningProvider
 from app.providers.speech import SpeechToTextProvider, TextToSpeechProvider
-from app.realtime.manager import connection_manager
+from app.realtime.manager import connection_manager, make_new_alerts_broadcaster
 from app.scheduler import IngestionScheduler
 from app.skills.agriculture import get_agriculture_advisory
 from app.skills.urban import get_urban_advisory
@@ -62,12 +63,15 @@ async def lifespan(app: FastAPI):
     # protocol the object itself must implement.
     settings = get_settings()
     scheduler = IngestionScheduler()
+    app.state.broadcast_new_alerts = make_new_alerts_broadcaster(asyncio.get_running_loop())
     if settings.enable_scheduler:
         scheduler.start(
             [
                 (
                     "alerts",
-                    lambda: ingest_alerts(SACHETWarningProvider()),
+                    lambda: ingest_alerts(
+                        SACHETWarningProvider(), on_new_alerts=app.state.broadcast_new_alerts
+                    ),
                     settings.alert_ingestion_interval_seconds,
                 ),
                 (
@@ -136,7 +140,9 @@ def verify_internal_api_key(
 
 @app.post("/internal/ingest/alerts", dependencies=[Depends(verify_internal_api_key)])
 def trigger_alert_ingestion() -> dict[str, int]:
-    count = ingest_alerts(SACHETWarningProvider())
+    count = ingest_alerts(
+        SACHETWarningProvider(), on_new_alerts=getattr(app.state, "broadcast_new_alerts", None)
+    )
     return {"ingested": count}
 
 
