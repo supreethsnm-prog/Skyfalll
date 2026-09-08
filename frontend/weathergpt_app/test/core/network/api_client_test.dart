@@ -32,4 +32,12 @@ void main() {
     );
     expect(mapDioException(err), isA<NetworkConnectionError>());
   });
+
+  test('maps a transform timeout to NetworkTimeoutError', () {
+    final err = DioException(
+      requestOptions: requestOptions,
+      type: DioExceptionType.transformTimeout,
+    );
+    expect(mapDioException(err), isA<NetworkTimeoutError>());
+  });
 }
