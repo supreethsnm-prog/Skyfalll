@@ -1,0 +1,15 @@
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - web/**
+    - windows/**
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    always_declare_return_types: true
+    avoid_print: true
+    prefer_const_constructors: true
+    prefer_const_literals_to_create_immutables: true
+    unawaited_futures: true
