@@ -1,8 +1,10 @@
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import httpx
+import numpy as np
 import pytest
 import xarray as xr
 
@@ -168,3 +170,147 @@ def test_close_only_closes_a_client_it_owns():
     owning = NoaaGfsProvider()
     owning.close()
     assert owning._client.is_closed
+
+
+# --- fetch_india_grid's numeric transform layer -----------------------------
+#
+# The rest of this file exercises fetch_india_grid's unit-conversion and
+# wind-vector math entirely offline: _fetch_field_group (which does the real
+# network fetch + cfgrib parse) is monkeypatched to hand back small,
+# hand-built xr.Dataset objects shaped like real cfgrib output (a
+# "latitude"/"longitude"-dimensioned Dataset with the field-group's cfgrib
+# variable names), so fetch_india_grid's own arithmetic is what's under test.
+
+
+def _fake_dataset(field_values: dict, lat, lon) -> xr.Dataset:
+    data_vars = {
+        name: (("latitude", "longitude"), np.asarray(values, dtype=float))
+        for name, values in field_values.items()
+    }
+    coords = {
+        "latitude": np.asarray(lat, dtype=float),
+        "longitude": np.asarray(lon, dtype=float),
+    }
+    return xr.Dataset(data_vars, coords=coords)
+
+
+def _provider_with_fake_fields(
+    monkeypatch, field_values: dict, lat=(20.0, 10.0), lon=(70.0, 80.0)
+) -> NoaaGfsProvider:
+    """A provider whose _fetch_idx/_fetch_field_group never touch the network.
+
+    field_values maps a cfgrib variable name (e.g. "t2m", "u10") to a 2D
+    array shaped (len(lat), len(lon)). Only the field groups that have at
+    least one requested variable produce a fake Dataset; the rest report
+    "field missing" (None), exactly like the real fetch does when a field
+    isn't present at a forecast hour.
+    """
+    provider = NoaaGfsProvider(client=MagicMock())
+    monkeypatch.setattr(provider, "_fetch_idx", lambda *a, **k: "")
+
+    def fake_fetch_field_group(run_date, run_hour, forecast_hour, idx_text, group):
+        group_vars = {
+            field.var_name: field_values[field.var_name]
+            for field in group.fields
+            if field.var_name in field_values
+        }
+        if not group_vars:
+            return None
+        return _fake_dataset(group_vars, lat, lon)
+
+    monkeypatch.setattr(provider, "_fetch_field_group", fake_fetch_field_group)
+    return provider
+
+
+def test_fetch_india_grid_converts_kelvin_to_celsius(monkeypatch):
+    provider = _provider_with_fake_fields(
+        monkeypatch, {"t2m": np.full((2, 2), 300.0)}
+    )
+
+    results = provider.fetch_india_grid("20260908", "00", 0)
+
+    assert len(results) == 4
+    assert results[0].temp_2m_c == pytest.approx(26.85)
+    assert all(r.temp_2m_c == pytest.approx(26.85) for r in results)
+
+
+def test_fetch_india_grid_converts_wind_gust_ms_to_kmh(monkeypatch):
+    # Flagged by review: this * 3.6 conversion is easy to accidentally drop.
+    provider = _provider_with_fake_fields(
+        monkeypatch, {"gust": np.full((2, 2), 5.0)}
+    )
+
+    results = provider.fetch_india_grid("20260908", "00", 0)
+
+    assert all(r.wind_gust_kmh == pytest.approx(18.0) for r in results)
+
+
+def test_fetch_india_grid_converts_precip_rate_to_mm_per_hour(monkeypatch):
+    provider = _provider_with_fake_fields(
+        monkeypatch, {"prate": np.full((2, 2), 0.001)}
+    )
+
+    results = provider.fetch_india_grid("20260908", "00", 0)
+
+    # 1 kg/m^2/s == 1 mm/s of water depth -> * 3600 s/h.
+    assert all(r.precip_rate_mmh == pytest.approx(3.6) for r in results)
+
+
+def test_fetch_india_grid_converts_pa_to_hpa(monkeypatch):
+    provider = _provider_with_fake_fields(
+        monkeypatch, {"prmsl": np.full((2, 2), 101325.0)}
+    )
+
+    results = provider.fetch_india_grid("20260908", "00", 0)
+
+    assert all(r.mslp_hpa == pytest.approx(1013.25) for r in results)
+
+
+def test_fetch_india_grid_computes_wind_speed_and_direction_from_uv(monkeypatch):
+    # Two grid points at the same latitude, differing only in u10's sign, so
+    # the two produce different "from" directions with identical speed. The
+    # second latitude row is unused filler — a single-row coordinate confuses
+    # xarray's monotonic-direction inference for _crop_to_india's slice.
+    u10 = np.array([[1.0, -1.0], [0.0, 0.0]])
+    v10 = np.array([[1.0, 1.0], [0.0, 0.0]])
+    provider = _provider_with_fake_fields(monkeypatch, {"u10": u10, "v10": v10})
+
+    results = provider.fetch_india_grid("20260908", "00", 0)
+
+    assert len(results) == 4
+    point_a, point_b = results[0], results[1]  # (lat=20, lon=70), (lat=20, lon=80)
+
+    expected_speed_a = math.hypot(1.0, 1.0) * 3.6
+    expected_dir_a = math.degrees(math.atan2(-1.0, -1.0)) % 360.0
+    assert point_a.wind_speed_10m_kmh == pytest.approx(expected_speed_a)
+    assert point_a.wind_direction_10m_deg == pytest.approx(expected_dir_a)
+    assert expected_dir_a == pytest.approx(225.0)  # from the south-west
+
+    expected_speed_b = math.hypot(-1.0, 1.0) * 3.6
+    expected_dir_b = math.degrees(math.atan2(1.0, -1.0)) % 360.0
+    assert point_b.wind_speed_10m_kmh == pytest.approx(expected_speed_b)
+    assert point_b.wind_direction_10m_deg == pytest.approx(expected_dir_b)
+    assert expected_dir_b == pytest.approx(135.0)  # from the north-west
+
+    # Same magnitude, genuinely different directions.
+    assert point_a.wind_speed_10m_kmh == pytest.approx(point_b.wind_speed_10m_kmh)
+    assert point_a.wind_direction_10m_deg != pytest.approx(
+        point_b.wind_direction_10m_deg
+    )
+
+
+def test_fetch_india_grid_maps_masked_nan_values_to_none(monkeypatch):
+    # A GRIB bitmap-masked point comes back as NaN from cfgrib — it must
+    # surface as None, not as a float NaN, on the output dataclass. The
+    # second latitude row is unused filler (see the wind test above for why
+    # a single-row coordinate is avoided).
+    provider = _provider_with_fake_fields(
+        monkeypatch,
+        {"t2m": np.array([[300.0, float("nan")], [300.0, 300.0]])},
+    )
+
+    results = provider.fetch_india_grid("20260908", "00", 0)
+
+    assert len(results) == 4
+    assert results[0].temp_2m_c == pytest.approx(26.85)  # (lat=20, lon=70)
+    assert results[1].temp_2m_c is None  # (lat=20, lon=80) — masked
