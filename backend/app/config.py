@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     enable_scheduler: bool = False
     alert_ingestion_interval_seconds: int = 300
     marine_ingestion_interval_seconds: int = 86400
+    # 6 hours — matches GFS's own run cadence; discover_latest_run() is cheap
+    # (a handful of HEAD requests) so checking every 6 hours won't over-fetch
+    # when nothing new has been published.
+    gfs_ingestion_interval_seconds: int = 21600
     internal_api_key: str | None = None
     cors_allowed_origins: str = (
         "http://localhost:3000,http://localhost:5173,"

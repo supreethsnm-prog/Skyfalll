@@ -19,6 +19,7 @@ from app.db import check_db_connection
 from app.forecast.service import get_forecast
 from app.geocoding.service import geocode_place
 from app.ingestion.alerts import ingest_alerts
+from app.ingestion.gfs import ingest_gfs_forecast
 from app.ingestion.marine import ingest_pfz_zones
 from app.marine import service as marine_service
 from app.providers.bhashini import BhashiniSpeechProvider
@@ -60,6 +61,11 @@ async def lifespan(app: FastAPI):
                     "marine",
                     lambda: ingest_pfz_zones(INCOISMarineProvider()),
                     settings.marine_ingestion_interval_seconds,
+                ),
+                (
+                    "gfs",
+                    lambda: ingest_gfs_forecast(),
+                    settings.gfs_ingestion_interval_seconds,
                 ),
             ]
         )
@@ -190,6 +196,12 @@ def trigger_marine_ingestion() -> dict[str, int]:
 def list_pfz_zones() -> list[dict]:
     # geometry is deliberately included (it's substantive content here, not internal bookkeeping like raw_payload).
     return marine_service.list_pfz_zones()
+
+
+@app.post("/internal/ingest/gfs", dependencies=[Depends(verify_internal_api_key)])
+def trigger_gfs_ingestion() -> dict[str, int]:
+    count = ingest_gfs_forecast()
+    return {"ingested": count}
 
 
 class ChatRequest(BaseModel):

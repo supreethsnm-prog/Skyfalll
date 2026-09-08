@@ -63,7 +63,7 @@ def test_lifespan_starts_scheduler_when_enabled(monkeypatch):
         mock_start.assert_called_once()
         jobs = mock_start.call_args[0][0]
         job_names = {job[0] for job in jobs}
-        assert job_names == {"alerts", "marine"}
+        assert job_names == {"alerts", "marine", "gfs"}
         mock_stop.assert_called_once()
     finally:
         get_settings.cache_clear()
@@ -73,6 +73,7 @@ def test_lifespan_uses_configured_intervals(monkeypatch):
     monkeypatch.setenv("ENABLE_SCHEDULER", "true")
     monkeypatch.setenv("ALERT_INGESTION_INTERVAL_SECONDS", "123")
     monkeypatch.setenv("MARINE_INGESTION_INTERVAL_SECONDS", "456")
+    monkeypatch.setenv("GFS_INGESTION_INTERVAL_SECONDS", "789")
     get_settings.cache_clear()
     mock_start = MagicMock()
     monkeypatch.setattr("app.main.IngestionScheduler.start", mock_start)
@@ -85,5 +86,6 @@ def test_lifespan_uses_configured_intervals(monkeypatch):
         intervals = {name: interval for name, _fn, interval in jobs}
         assert intervals["alerts"] == 123
         assert intervals["marine"] == 456
+        assert intervals["gfs"] == 789
     finally:
         get_settings.cache_clear()

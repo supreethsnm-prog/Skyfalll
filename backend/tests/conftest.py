@@ -3,7 +3,15 @@ from sqlalchemy import delete
 
 from app.config import get_settings
 from app.db import get_engine
-from app.models import Alert, GeocodeCache, MetarReading, PfzZone, WeatherForecast, WeatherReading
+from app.models import (
+    Alert,
+    GeocodeCache,
+    GfsForecastPoint,
+    MetarReading,
+    PfzZone,
+    WeatherForecast,
+    WeatherReading,
+)
 from app.providers.llm import LLMTurn
 from app.providers.marine import PfzZoneData
 from app.providers.warning import AlertData
@@ -93,3 +101,10 @@ def clean_weather_forecasts():
     _truncate(WeatherForecast)
     yield
     _truncate(WeatherForecast)
+
+
+@pytest.fixture
+def clean_gfs_forecast_points():
+    _truncate(GfsForecastPoint)
+    yield
+    _truncate(GfsForecastPoint)
