@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/theme_mode_provider.dart';
 import '../../shared/widgets/app_chip.dart';
 import '../../shared/widgets/app_primary_button.dart';
 import '../../shared/widgets/empty_view.dart';
@@ -14,15 +16,27 @@ import '../../shared/widgets/weather_icon.dart';
 /// the `/gallery` route (see app_router.dart). Should gain a
 /// debug-build guard before a public release; left open for now since
 /// this phase has no other screen to link to it from.
-class GalleryScreen extends StatelessWidget {
+class GalleryScreen extends ConsumerWidget {
   const GalleryScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Component gallery')),
+      appBar: AppBar(
+        title: const Text('Component gallery'),
+        actions: [
+          IconButton(
+            icon: Icon(
+              isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+            ),
+            tooltip: 'Toggle light/dark theme',
+            onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
