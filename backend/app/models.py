@@ -116,3 +116,32 @@ class WeatherForecast(Base):
     wind_speed_max_kmh = Column(Float, nullable=False)
     raw_payload = Column(JSONB, nullable=False)
     fetched_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class GfsForecastPoint(Base):
+    __tablename__ = "gfs_forecast_points"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_date", "run_hour", "forecast_hour", "grid_latitude", "grid_longitude",
+            name="uq_gfs_forecast_points_run_hour_point",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    run_date = Column(String, nullable=False, index=True)
+    run_hour = Column(String, nullable=False)
+    forecast_hour = Column(Integer, nullable=False)
+    valid_time = Column(DateTime(timezone=True), nullable=False)
+    grid_latitude = Column(Float, nullable=False, index=True)
+    grid_longitude = Column(Float, nullable=False, index=True)
+    temp_2m_c = Column(Float, nullable=True)
+    relative_humidity_2m_pct = Column(Float, nullable=True)
+    wind_speed_10m_kmh = Column(Float, nullable=True)
+    wind_direction_10m_deg = Column(Float, nullable=True)
+    wind_gust_kmh = Column(Float, nullable=True)
+    precip_rate_mmh = Column(Float, nullable=True)
+    cape_j_per_kg = Column(Float, nullable=True)
+    cin_j_per_kg = Column(Float, nullable=True)
+    cloud_cover_pct = Column(Float, nullable=True)
+    mslp_hpa = Column(Float, nullable=True)
+    fetched_at = Column(DateTime(timezone=True), nullable=False)
