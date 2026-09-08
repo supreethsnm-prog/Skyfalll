@@ -13,6 +13,14 @@ script is meant to be run once, not integrated into any fast path.
 import logging
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
+
+# When run directly (`python scripts/seed_era5_history.py`), Python puts this
+# file's own directory (backend/scripts) on sys.path[0], NOT the current
+# working directory — so `app.*` isn't importable without this. Mirrors the
+# same fix in alembic/env.py, which has the identical problem for the same
+# reason (a script living one directory below backend/).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
