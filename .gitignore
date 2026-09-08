@@ -4,3 +4,6 @@ __pycache__/
 .env
 .pytest_cache/
 .claude/
+# cfgrib's own cache-index sidecar, auto-generated next to any .grib2 file
+# it opens (distinct from a real NOAA .idx sidecar, which has no hash)
+*.grib2.*.idx
