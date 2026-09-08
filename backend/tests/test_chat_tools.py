@@ -5,10 +5,17 @@ from sqlalchemy import insert
 
 from app.chat.tools import _CHAT_TOOL_RESULT_CAP, TOOL_SPECS, execute_tool
 from app.db import get_engine
-from app.models import Alert, GfsForecastPoint, PfzZone, WeatherForecast, WeatherReading
+from app.models import (
+    Alert,
+    GfsForecastPoint,
+    HistoricalWeatherReading,
+    PfzZone,
+    WeatherForecast,
+    WeatherReading,
+)
 
 
-def test_tool_specs_cover_all_nine_data_sources():
+def test_tool_specs_cover_all_ten_data_sources():
     names = {spec.name for spec in TOOL_SPECS}
     assert names == {
         "get_weather",
@@ -20,6 +27,7 @@ def test_tool_specs_cover_all_nine_data_sources():
         "agriculture_advisory",
         "urban_advisory",
         "get_nwp_forecast",
+        "get_historical_weather",
     }
 
 
@@ -376,3 +384,42 @@ def test_tool_specs_get_nwp_forecast_declares_expected_parameters():
     spec = next(s for s in TOOL_SPECS if s.name == "get_nwp_forecast")
     assert set(spec.input_schema["properties"]) == {"latitude", "longitude"}
     assert spec.input_schema["required"] == ["latitude", "longitude"]
+
+
+def test_execute_get_historical_weather_returns_seeded_reading_as_json(
+    clean_historical_weather_readings,
+):
+    with get_engine().begin() as conn:
+        conn.execute(
+            insert(HistoricalWeatherReading).values(
+                location_name="Mumbai", latitude=19.08, longitude=72.88,
+                observation_date="2023-07-15", temp_2m_c=27.3, dewpoint_2m_c=25.4,
+                precip_mm=0.73, wind_speed_10m_kmh=16.0, wind_direction_10m_deg=247.3,
+                mslp_hpa=1006.5, fetched_at=datetime.now(timezone.utc),
+            )
+        )
+
+    result_json = execute_tool(
+        "get_historical_weather", {"location": "Mumbai", "date": "2023-07-15"}
+    )
+    result = json.loads(result_json)
+
+    assert result["temp_2m_c"] == 27.3
+    assert "error" not in result
+
+
+def test_execute_get_historical_weather_returns_error_for_unseeded_combination(
+    clean_historical_weather_readings,
+):
+    result_json = execute_tool(
+        "get_historical_weather", {"location": "Mumbai", "date": "2020-01-01"}
+    )
+    result = json.loads(result_json)
+
+    assert "error" in result
+
+
+def test_tool_specs_get_historical_weather_declares_expected_parameters():
+    spec = next(s for s in TOOL_SPECS if s.name == "get_historical_weather")
+    assert set(spec.input_schema["properties"]) == {"location", "date"}
+    assert spec.input_schema["required"] == ["location", "date"]

@@ -12,6 +12,7 @@ import json
 from app.aviation.service import get_metar
 from app.forecast.service import get_forecast
 from app.geocoding.service import geocode_place
+from app.history.service import get_historical_weather
 from app.marine.service import list_pfz_zones
 from app.nwp.service import get_nwp_forecast
 from app.providers.llm import ToolSpec
@@ -158,6 +159,27 @@ TOOL_SPECS: list[ToolSpec] = [
             "required": ["latitude", "longitude"],
         },
     ),
+    ToolSpec(
+        name="get_historical_weather",
+        description=(
+            "Get historical weather (temperature, precipitation, wind, pressure) for a "
+            "specific major Indian city on a specific past date, from ERA5 reanalysis data. "
+            "Each reading is a single 12:00 UTC (17:30 IST) snapshot for that date, not a "
+            "daily mean/max or a 24-hour precipitation total. IMPORTANT: this only covers a "
+            "small, fixed, pre-seeded set of cities and sample dates (not arbitrary "
+            "locations/dates) — if this tool returns not-found, tell the user this specific "
+            "city/date combination isn't in the pre-loaded historical dataset, don't imply "
+            "historical data doesn't exist at all."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "location": {"type": "string", "description": "A city name, e.g. 'Mumbai'"},
+                "date": {"type": "string", "description": "Date in 'YYYY-MM-DD' format"},
+            },
+            "required": ["location", "date"],
+        },
+    ),
 ]
 
 
@@ -226,6 +248,18 @@ def _handle_get_nwp_forecast(tool_input: dict) -> list[dict]:
     return get_nwp_forecast(latitude=tool_input["latitude"], longitude=tool_input["longitude"])
 
 
+def _handle_get_historical_weather(tool_input: dict) -> dict:
+    result = get_historical_weather(tool_input["location"], tool_input["date"])
+    if result is None:
+        return {
+            "error": (
+                f"No historical data for '{tool_input['location']}' on "
+                f"{tool_input['date']}"
+            )
+        }
+    return result
+
+
 _HANDLERS = {
     "get_weather": _handle_get_weather,
     "get_forecast": _handle_get_forecast,
@@ -236,6 +270,7 @@ _HANDLERS = {
     "agriculture_advisory": _handle_agriculture_advisory,
     "urban_advisory": _handle_urban_advisory,
     "get_nwp_forecast": _handle_get_nwp_forecast,
+    "get_historical_weather": _handle_get_historical_weather,
 }
 
 

@@ -30,6 +30,7 @@ from app.config import get_settings
 from app.db import check_db_connection
 from app.forecast.service import get_forecast
 from app.geocoding.service import geocode_place
+from app.history.service import get_historical_weather
 from app.ingestion.alerts import ingest_alerts
 from app.ingestion.gfs import ingest_gfs_forecast
 from app.ingestion.marine import ingest_pfz_zones
@@ -260,6 +261,24 @@ def nwp_forecast_endpoint(
     lon: float = Query(..., ge=-180, le=180),
 ) -> list[dict]:
     return get_nwp_forecast(lat, lon)
+
+
+@app.get("/historical")
+def historical_weather_endpoint(
+    location: str = Query(..., min_length=1),
+    date: str = Query(..., min_length=10, max_length=10),
+) -> dict:
+    result = get_historical_weather(location, date)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No historical data for '{location}' on {date}. This dataset only covers "
+                "a small pre-seeded set of major Indian cities and sample dates — see "
+                "backend/scripts/seed_era5_history.py's LOCATIONS/DATES for exact coverage."
+            ),
+        )
+    return result
 
 
 class ChatRequest(BaseModel):
