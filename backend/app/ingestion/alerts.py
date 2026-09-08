@@ -118,6 +118,19 @@ def ingest_alerts(
             for alert in alerts
             if alert.external_id in new_external_ids
         ]
-        on_new_alerts(new_alerts)
+        # The notification layer must never be able to change this
+        # ingestion's own success/failure status: everything above has
+        # already COMMITTED by this point. A reachable failure here is
+        # asyncio.run_coroutine_threadsafe against an already-closed event
+        # loop, which raises synchronously — a real shutdown race, since
+        # IngestionScheduler.stop()'s join timeout is shorter than a worst-
+        # case SACHET fetch. Letting that propagate would log "ingestion
+        # failed" for a run that fully succeeded, and return an outright
+        # false HTTP 500 from /internal/ingest/alerts that an operator
+        # would reasonably (and wrongly) retry.
+        try:
+            on_new_alerts(new_alerts)
+        except Exception:
+            logger.exception("on_new_alerts callback failed after a successful ingestion")
 
     return len(alerts)

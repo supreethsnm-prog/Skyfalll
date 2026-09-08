@@ -69,6 +69,43 @@ def test_lifespan_starts_scheduler_when_enabled(monkeypatch):
         get_settings.cache_clear()
 
 
+def test_lifespan_alerts_job_passes_the_broadcaster_to_ingest_alerts(monkeypatch):
+    # The tests above only assert job NAMES and INTERVALS — they never invoke
+    # the alerts job's lambda, so nothing here previously protected the wiring
+    # that makes a SCHEDULED (as opposed to manually-triggered) ingestion push
+    # to WebSocket clients. Deleting `on_new_alerts=...` from that lambda left
+    # the whole suite green. This test closes that gap by actually calling the
+    # job and asserting the real broadcaster reaches ingest_alerts.
+    monkeypatch.setenv("ENABLE_SCHEDULER", "true")
+    get_settings.cache_clear()
+    mock_start = MagicMock()
+    monkeypatch.setattr("app.main.IngestionScheduler.start", mock_start)
+    monkeypatch.setattr("app.main.IngestionScheduler.stop", MagicMock())
+    # The job constructs a real provider; stub it so invoking the lambda can
+    # never touch the network (see this module's CRITICAL docstring note).
+    monkeypatch.setattr("app.main.SACHETWarningProvider", MagicMock())
+    seen = {}
+
+    def _fake_ingest_alerts(provider, on_new_alerts=None):
+        seen["cb"] = on_new_alerts
+        return 0
+
+    monkeypatch.setattr("app.main.ingest_alerts", _fake_ingest_alerts)
+
+    try:
+        _run_lifespan_once()
+
+        jobs = mock_start.call_args[0][0]
+        alerts_job = next(fn for name, fn, _interval in jobs if name == "alerts")
+        alerts_job()
+
+        assert "cb" in seen  # the lambda really did call ingest_alerts
+        assert seen["cb"] is not None  # ...and did not drop the wiring
+        assert seen["cb"] is app.state.broadcast_new_alerts  # ...passing the REAL broadcaster
+    finally:
+        get_settings.cache_clear()
+
+
 def test_lifespan_uses_configured_intervals(monkeypatch):
     monkeypatch.setenv("ENABLE_SCHEDULER", "true")
     monkeypatch.setenv("ALERT_INGESTION_INTERVAL_SECONDS", "123")

@@ -279,6 +279,37 @@ def test_ingest_without_on_new_alerts_still_works_unchanged(clean_alerts_table):
     assert count == 1
 
 
+def test_a_raising_on_new_alerts_callback_does_not_fail_the_ingestion(clean_alerts_table):
+    # The ingestion has already COMMITTED by the time on_new_alerts runs, so a
+    # failure in the notification layer must never be misreported as an
+    # ingestion failure. The concrete reachable case is
+    # asyncio.run_coroutine_threadsafe against an already-closed event loop
+    # (a shutdown race), which raises synchronously — previously that
+    # propagated out of ingest_alerts, making the scheduled job log
+    # "ingestion failed" for a fully successful run and making
+    # /internal/ingest/alerts return a false HTTP 500 that an operator would
+    # reasonably retry.
+    alert = AlertData(
+        external_id="callback-boom-1", source="SACHET-SDMA", severity="Severe",
+        event_type="Cyclone", area_description="Odisha coast", effective_start_time=None,
+        effective_end_time=None, warning_message=None, severity_color=None,
+        latitude=20.0, longitude=85.0, raw_payload={},
+    )
+
+    def _exploding_callback(new_alerts):
+        raise RuntimeError("Event loop is closed")
+
+    count = ingest_alerts(FakeWarningProvider([alert]), on_new_alerts=_exploding_callback)
+
+    # The ingestion's own success is unaffected by the broken notification.
+    assert count == 1
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            select(Alert).where(Alert.external_id == "callback-boom-1")
+        ).fetchall()
+    assert len(rows) == 1  # and the data really did commit
+
+
 def test_ingest_does_not_call_on_new_alerts_when_fetch_is_empty(clean_alerts_table):
     from tests.conftest import FakeWarningProvider
 

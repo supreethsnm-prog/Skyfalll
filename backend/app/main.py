@@ -156,7 +156,26 @@ async def alerts_websocket(websocket: WebSocket) -> None:
     await connection_manager.connect(websocket)
     try:
         while True:
-            await websocket.receive_text()
+            # receive(), not receive_text(): this endpoint is push-only and
+            # ignores whatever the client sends — it reads solely to detect
+            # disconnection — while receive_text() assumes every frame is
+            # text and raises KeyError('text') on a BINARY frame. That
+            # KeyError is not a WebSocketDisconnect, so it would escape the
+            # handler into the ASGI server and close the connection with
+            # error code 1011. receive() is frame-type agnostic.
+            #
+            # The explicit disconnect check is REQUIRED, not belt-and-braces:
+            # unlike receive_text(), the raw receive() does not raise
+            # WebSocketDisconnect — it RETURNS the "websocket.disconnect"
+            # message and flips the socket to DISCONNECTED, so looping around
+            # to call it again raises RuntimeError('Cannot call "receive"
+            # once a disconnect message has been received.'), which this
+            # except clause would not catch either. (Verified empirically:
+            # without this break, all four tests in
+            # tests/test_alerts_websocket.py fail with exactly that error.)
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                break
     except WebSocketDisconnect:
         pass
     finally:
