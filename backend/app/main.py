@@ -8,7 +8,18 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 import httpx
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -29,6 +40,7 @@ from app.providers.incois import INCOISMarineProvider
 from app.providers.llm import LLMProvider
 from app.providers.sachet import SACHETWarningProvider
 from app.providers.speech import SpeechToTextProvider, TextToSpeechProvider
+from app.realtime.manager import connection_manager
 from app.scheduler import IngestionScheduler
 from app.skills.agriculture import get_agriculture_advisory
 from app.skills.urban import get_urban_advisory
@@ -131,6 +143,18 @@ def trigger_alert_ingestion() -> dict[str, int]:
 @app.get("/alerts")
 def list_alerts() -> list[dict]:
     return warning_service.list_alerts()
+
+
+@app.websocket("/ws/alerts")
+async def alerts_websocket(websocket: WebSocket) -> None:
+    await connection_manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        connection_manager.disconnect(websocket)
 
 
 @app.get("/weather")
