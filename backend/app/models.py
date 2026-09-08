@@ -145,3 +145,25 @@ class GfsForecastPoint(Base):
     cloud_cover_pct = Column(Float, nullable=True)
     mslp_hpa = Column(Float, nullable=True)
     fetched_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class HistoricalWeatherReading(Base):
+    __tablename__ = "historical_weather_readings"
+    __table_args__ = (
+        UniqueConstraint(
+            "location_name", "observation_date", name="uq_historical_weather_location_date"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    location_name = Column(String, nullable=False, index=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    observation_date = Column(String, nullable=False)
+    temp_2m_c = Column(Float, nullable=True)
+    dewpoint_2m_c = Column(Float, nullable=True)
+    precip_mm = Column(Float, nullable=True)
+    wind_speed_10m_kmh = Column(Float, nullable=True)
+    wind_direction_10m_deg = Column(Float, nullable=True)
+    mslp_hpa = Column(Float, nullable=True)
+    fetched_at = Column(DateTime(timezone=True), nullable=False)
