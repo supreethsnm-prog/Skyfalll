@@ -22,6 +22,7 @@ from app.ingestion.alerts import ingest_alerts
 from app.ingestion.gfs import ingest_gfs_forecast
 from app.ingestion.marine import ingest_pfz_zones
 from app.marine import service as marine_service
+from app.nwp.service import get_nwp_forecast
 from app.providers.bhashini import BhashiniSpeechProvider
 from app.providers.factory import build_llm_provider
 from app.providers.incois import INCOISMarineProvider
@@ -202,6 +203,14 @@ def list_pfz_zones() -> list[dict]:
 def trigger_gfs_ingestion() -> dict[str, int]:
     count = ingest_gfs_forecast()
     return {"ingested": count}
+
+
+@app.get("/nwp")
+def nwp_forecast_endpoint(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+) -> list[dict]:
+    return get_nwp_forecast(lat, lon)
 
 
 class ChatRequest(BaseModel):

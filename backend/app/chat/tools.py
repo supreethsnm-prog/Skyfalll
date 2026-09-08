@@ -13,6 +13,7 @@ from app.aviation.service import get_metar
 from app.forecast.service import get_forecast
 from app.geocoding.service import geocode_place
 from app.marine.service import list_pfz_zones
+from app.nwp.service import get_nwp_forecast
 from app.providers.llm import ToolSpec
 from app.skills.agriculture import get_agriculture_advisory
 from app.skills.urban import get_urban_advisory
@@ -139,6 +140,24 @@ TOOL_SPECS: list[ToolSpec] = [
             "required": ["latitude", "longitude"],
         },
     ),
+    ToolSpec(
+        name="get_nwp_forecast",
+        description=(
+            "Get a medium-range (up to 5-day-ahead) weather outlook from the GFS global "
+            "numerical model — temperature, humidity, wind, precipitation rate, cloud cover, "
+            "CAPE/CIN, and sea-level pressure at 0/24/48/72/96/120 hours ahead. Complements "
+            "get_forecast (Open-Meteo, near-term) with a second, independent "
+            "government-model-based source. Only covers India (6-38N, 68-98E)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "latitude": {"type": "number", "description": "Latitude in decimal degrees"},
+                "longitude": {"type": "number", "description": "Longitude in decimal degrees"},
+            },
+            "required": ["latitude", "longitude"],
+        },
+    ),
 ]
 
 
@@ -203,6 +222,10 @@ def _handle_urban_advisory(tool_input: dict) -> dict:
     return get_urban_advisory(latitude=tool_input["latitude"], longitude=tool_input["longitude"])
 
 
+def _handle_get_nwp_forecast(tool_input: dict) -> list[dict]:
+    return get_nwp_forecast(latitude=tool_input["latitude"], longitude=tool_input["longitude"])
+
+
 _HANDLERS = {
     "get_weather": _handle_get_weather,
     "get_forecast": _handle_get_forecast,
@@ -212,6 +235,7 @@ _HANDLERS = {
     "list_pfz_zones": _handle_list_pfz_zones,
     "agriculture_advisory": _handle_agriculture_advisory,
     "urban_advisory": _handle_urban_advisory,
+    "get_nwp_forecast": _handle_get_nwp_forecast,
 }
 
 

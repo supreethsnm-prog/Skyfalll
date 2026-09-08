@@ -5,10 +5,10 @@ from sqlalchemy import insert
 
 from app.chat.tools import _CHAT_TOOL_RESULT_CAP, TOOL_SPECS, execute_tool
 from app.db import get_engine
-from app.models import Alert, PfzZone, WeatherForecast, WeatherReading
+from app.models import Alert, GfsForecastPoint, PfzZone, WeatherForecast, WeatherReading
 
 
-def test_tool_specs_cover_all_eight_data_sources():
+def test_tool_specs_cover_all_nine_data_sources():
     names = {spec.name for spec in TOOL_SPECS}
     assert names == {
         "get_weather",
@@ -19,6 +19,7 @@ def test_tool_specs_cover_all_eight_data_sources():
         "list_pfz_zones",
         "agriculture_advisory",
         "urban_advisory",
+        "get_nwp_forecast",
     }
 
 
@@ -341,5 +342,37 @@ def test_tool_specs_agriculture_advisory_declares_expected_parameters():
 
 def test_tool_specs_urban_advisory_declares_expected_parameters():
     spec = next(s for s in TOOL_SPECS if s.name == "urban_advisory")
+    assert set(spec.input_schema["properties"]) == {"latitude", "longitude"}
+    assert spec.input_schema["required"] == ["latitude", "longitude"]
+
+
+def test_execute_get_nwp_forecast_returns_seeded_rows_as_json(clean_gfs_forecast_points):
+    with get_engine().begin() as conn:
+        conn.execute(
+            insert(GfsForecastPoint).values(
+                run_date="20260908", run_hour="00", forecast_hour=0,
+                valid_time=datetime(2026, 9, 8, tzinfo=timezone.utc),
+                grid_latitude=19.0, grid_longitude=73.0,
+                temp_2m_c=28.0, fetched_at=datetime.now(timezone.utc),
+            )
+        )
+
+    result_json = execute_tool("get_nwp_forecast", {"latitude": 19.08, "longitude": 72.88})
+    result = json.loads(result_json)
+
+    assert result[0]["temp_2m_c"] == 28.0
+    assert "grid_latitude" not in result[0]
+    assert "error" not in result
+
+
+def test_execute_get_nwp_forecast_out_of_india_returns_empty_list(clean_gfs_forecast_points):
+    result_json = execute_tool("get_nwp_forecast", {"latitude": 51.5, "longitude": -0.1})
+    result = json.loads(result_json)
+
+    assert result == []
+
+
+def test_tool_specs_get_nwp_forecast_declares_expected_parameters():
+    spec = next(s for s in TOOL_SPECS if s.name == "get_nwp_forecast")
     assert set(spec.input_schema["properties"]) == {"latitude", "longitude"}
     assert spec.input_schema["required"] == ["latitude", "longitude"]
