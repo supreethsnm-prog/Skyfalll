@@ -216,3 +216,74 @@ def test_ingest_alerts_concurrent_calls_do_not_deadlock_or_corrupt_state(clean_a
     # The final state must match exactly ONE thread's fetch set - not a
     # mix of half-applied writes from two different threads.
     assert final_ids in fetch_sets.values()
+
+
+def test_ingest_calls_on_new_alerts_with_only_genuinely_new_alerts(clean_alerts_table):
+    from app.providers.warning import AlertData
+    from tests.conftest import FakeWarningProvider
+
+    existing = AlertData(
+        external_id="old-1", source="SACHET-SDMA", severity="Minor", event_type="Flood",
+        area_description=None, effective_start_time=None, effective_end_time=None,
+        warning_message=None, severity_color=None, latitude=None, longitude=None,
+        raw_payload={},
+    )
+    ingest_alerts(FakeWarningProvider([existing]))  # seed the table on a first cycle, no callback
+
+    new_one = AlertData(
+        external_id="new-1", source="SACHET-SDMA", severity="Severe", event_type="Cyclone",
+        area_description="Odisha coast", effective_start_time=None, effective_end_time=None,
+        warning_message=None, severity_color=None, latitude=20.0, longitude=85.0,
+        raw_payload={},
+    )
+    captured = []
+    ingest_alerts(FakeWarningProvider([existing, new_one]), on_new_alerts=captured.append)
+
+    assert len(captured) == 1
+    assert [a["external_id"] for a in captured[0]] == ["new-1"]
+    assert captured[0][0]["severity"] == "Severe"
+    assert captured[0][0]["event_type"] == "Cyclone"
+    assert "raw_payload" not in captured[0][0]
+    assert "id" not in captured[0][0]
+
+
+def test_ingest_calls_on_new_alerts_with_empty_list_when_nothing_is_new(clean_alerts_table):
+    from app.providers.warning import AlertData
+    from tests.conftest import FakeWarningProvider
+
+    existing = AlertData(
+        external_id="old-1", source="SACHET-SDMA", severity="Minor", event_type="Flood",
+        area_description=None, effective_start_time=None, effective_end_time=None,
+        warning_message=None, severity_color=None, latitude=None, longitude=None,
+        raw_payload={},
+    )
+    ingest_alerts(FakeWarningProvider([existing]))
+
+    captured = []
+    ingest_alerts(FakeWarningProvider([existing]), on_new_alerts=captured.append)
+
+    assert captured == [[]]
+
+
+def test_ingest_without_on_new_alerts_still_works_unchanged(clean_alerts_table):
+    from app.providers.warning import AlertData
+    from tests.conftest import FakeWarningProvider
+
+    alert = AlertData(
+        external_id="a-1", source="SACHET-SDMA", severity="Minor", event_type="Flood",
+        area_description=None, effective_start_time=None, effective_end_time=None,
+        warning_message=None, severity_color=None, latitude=None, longitude=None,
+        raw_payload={},
+    )
+    count = ingest_alerts(FakeWarningProvider([alert]))  # no on_new_alerts at all
+    assert count == 1
+
+
+def test_ingest_does_not_call_on_new_alerts_when_fetch_is_empty(clean_alerts_table):
+    from tests.conftest import FakeWarningProvider
+
+    captured = []
+    count = ingest_alerts(FakeWarningProvider([]), on_new_alerts=captured.append)
+
+    assert count == 0
+    assert captured == []  # the empty-fetch guard returns before any callback logic runs

@@ -1,9 +1,10 @@
 """Scheduled ingestion for SACHET's bounded, broadcast alert feed (see app/ingestion/marine.py for a second instance of this same pattern) — see app/weather/service.py for the point-location cache-with-TTL pattern and app/geocoding/service.py for the permanent-cache pattern, both used where there's no fixed location set to precompute."""
 
 import logging
+from collections.abc import Callable
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db import get_engine
@@ -24,7 +25,9 @@ _UPSERT_COLUMNS = tuple(
 _INGEST_ALERTS_LOCK_KEY = 727001
 
 
-def ingest_alerts(provider: WarningProvider) -> int:
+def ingest_alerts(
+    provider: WarningProvider, on_new_alerts: Callable[[list[dict]], None] | None = None
+) -> int:
     alerts = provider.fetch_alerts()
     if not alerts:
         # Deliberately does NOT delete existing rows here — see the plan's
@@ -40,6 +43,16 @@ def ingest_alerts(provider: WarningProvider) -> int:
     fetched_at = datetime.now(timezone.utc)
     with get_engine().begin() as conn:
         conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _INGEST_ALERTS_LOCK_KEY})
+
+        # Captured BEFORE upserting, inside the same lock/transaction, so
+        # "new" reflects the table's real state at the instant this cycle
+        # started — not a snapshot racing a concurrent ingestion call.
+        existing_external_ids = {
+            row[0]
+            for row in conn.execute(
+                select(Alert.external_id).where(Alert.external_id.in_(fetched_external_ids))
+            )
+        }
 
         for alert in alerts:
             stmt = pg_insert(Alert).values(
@@ -81,5 +94,30 @@ def ingest_alerts(provider: WarningProvider) -> int:
                 Alert.external_id.notin_(fetched_external_ids),
             )
         )
+
+    # Broadcast only AFTER the transaction has committed (the `with` block
+    # above has exited successfully) — a rolled-back ingestion must never
+    # notify clients about alerts that were never actually persisted.
+    if on_new_alerts is not None:
+        new_external_ids = fetched_external_ids - existing_external_ids
+        new_alerts = [
+            {
+                "external_id": alert.external_id,
+                "source": alert.source,
+                "severity": alert.severity,
+                "event_type": alert.event_type,
+                "area_description": alert.area_description,
+                "effective_start_time": alert.effective_start_time,
+                "effective_end_time": alert.effective_end_time,
+                "warning_message": alert.warning_message,
+                "severity_color": alert.severity_color,
+                "latitude": alert.latitude,
+                "longitude": alert.longitude,
+                "fetched_at": fetched_at.isoformat(),
+            }
+            for alert in alerts
+            if alert.external_id in new_external_ids
+        ]
+        on_new_alerts(new_alerts)
 
     return len(alerts)
