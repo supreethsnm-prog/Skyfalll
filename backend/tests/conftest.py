@@ -7,6 +7,7 @@ from app.models import (
     Alert,
     GeocodeCache,
     GfsForecastPoint,
+    HistoricalWeatherReading,
     MetarReading,
     PfzZone,
     WeatherForecast,
@@ -115,3 +116,10 @@ def clean_gfs_forecast_points():
     _truncate(GfsForecastPoint)
     yield
     _truncate(GfsForecastPoint)
+
+
+@pytest.fixture
+def clean_historical_weather_readings():
+    _truncate(HistoricalWeatherReading)
+    yield
+    _truncate(HistoricalWeatherReading)
