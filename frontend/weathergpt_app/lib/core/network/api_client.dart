@@ -31,6 +31,7 @@ AppError mapDioException(DioException err) {
     case DioExceptionType.connectionTimeout:
     case DioExceptionType.sendTimeout:
     case DioExceptionType.receiveTimeout:
+    case DioExceptionType.transformTimeout:
       return const NetworkTimeoutError();
     case DioExceptionType.connectionError:
       return const NetworkConnectionError();
