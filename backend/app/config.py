@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     bhashini_user_id: str | None = None
     bhashini_inference_key: str | None = None
     bhashini_pipeline_id: str | None = None
+    cds_api_key: str | None = None
 
 
 @lru_cache
