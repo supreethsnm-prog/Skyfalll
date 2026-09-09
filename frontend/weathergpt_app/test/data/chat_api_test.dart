@@ -38,6 +38,35 @@ void main() {
       expect(ChatTurn.tryFromRaw('not a map'), isNull);
       expect(ChatTurn.tryFromRaw(null), isNull);
     });
+
+    test('returns null for an assistant entry with empty content and a tool_calls key', () {
+      // The exact real-world shape backend/app/chat/service.py appends for
+      // every tool-calling round: content is "" (turn.text was None) and
+      // tool_calls marks this as a tool-initiating turn, not a reply.
+      final turn = ChatTurn.tryFromRaw({
+        'role': 'assistant',
+        'content': '',
+        'tool_calls': [
+          {'id': 'call_1', 'name': 'get_weather', 'input': {}},
+        ],
+      });
+      expect(turn, isNull);
+    });
+
+    test('parses an assistant entry with non-empty content and no tool_calls key', () {
+      final turn = ChatTurn.tryFromRaw({
+        'role': 'assistant',
+        'content': 'It is sunny in Mumbai.',
+      });
+      expect(turn, isNotNull);
+      expect(turn!.role, 'assistant');
+      expect(turn.content, 'It is sunny in Mumbai.');
+    });
+
+    test('returns null for whitespace-only content with no tool_calls key', () {
+      final turn = ChatTurn.tryFromRaw({'role': 'assistant', 'content': '   '});
+      expect(turn, isNull);
+    });
   });
 
   group('parseChatResult', () {

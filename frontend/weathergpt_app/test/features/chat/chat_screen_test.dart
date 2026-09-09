@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:weathergpt_app/core/network/app_error.dart';
 import 'package:weathergpt_app/data/chat_api.dart';
 import 'package:weathergpt_app/features/chat/chat_controller.dart';
 import 'package:weathergpt_app/features/chat/chat_screen.dart';
@@ -20,6 +21,18 @@ class FakeChatApi implements ChatApi {
           ],
         );
   }
+}
+
+// `chatControllerProvider` is a `NotifierProvider<ChatController, ChatUiState>`,
+// so `overrideWith` requires a factory that returns a `ChatController`
+// specifically — mirrors the seeding pattern in
+// test/golden/chat_screen_golden_test.dart.
+class _SeededChatController extends ChatController {
+  final ChatUiState seed;
+  _SeededChatController(this.seed);
+
+  @override
+  ChatUiState build() => seed;
 }
 
 void main() {
@@ -69,5 +82,43 @@ void main() {
     expect(find.text('Weather in Pune?'), findsOneWidget);
     expect(find.text('Echo: Weather in Pune?'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget); // composer still present
+  });
+
+  testWidgets('disables the composer while ChatFailed, forcing Retry as the only path out', (tester) async {
+    final fakeApi = FakeChatApi();
+    const failedState = ChatFailed(
+      [ChatTurn(role: 'user', content: 'Weather in Pune?')],
+      'Weather in Pune?',
+      null,
+      NetworkConnectionError(),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        chatApiProvider.overrideWithValue(fakeApi),
+        chatControllerProvider.overrideWith(() => _SeededChatController(failedState)),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: ChatScreen()),
+      ),
+    );
+    await tester.pump();
+
+    final textField = tester.widget<TextField>(find.byType(TextField));
+    expect(textField.enabled, isFalse);
+
+    // Attempting to type into the disabled field must not reach the
+    // controller — the message list stays exactly what it was at
+    // failure (no new optimistic user turn appears), proving a new send
+    // was not silently started from a stale _rawHistory.
+    await tester.enterText(find.byType(TextField), 'Try again?');
+    await tester.pump();
+
+    expect(find.text('Try again?'), findsNothing);
+    expect(container.read(chatControllerProvider), same(failedState));
   });
 }

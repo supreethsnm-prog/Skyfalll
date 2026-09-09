@@ -16,27 +16,37 @@ void main() {
   });
 
   testWidgets('gives a user turn a decorated Container background, unlike an assistant turn', (tester) async {
+    // Pumped and scoped separately (rather than both tiles in one tree and
+    // asserting "some Container somewhere has a decoration") so this test
+    // actually catches isUser's branch being accidentally inverted — a
+    // combined-tree assertion would still pass if the assistant tile got
+    // the bubble and the user tile didn't.
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: Column(
-            children: [
-              ChatTurnTile(turn: ChatTurn(role: 'user', content: 'Hi')),
-              ChatTurnTile(turn: ChatTurn(role: 'assistant', content: 'Hello')),
-            ],
-          ),
+          body: ChatTurnTile(turn: ChatTurn(role: 'user', content: 'Hi')),
         ),
       ),
     );
-
-    final userContainer = tester.widgetList<Container>(find.byType(Container));
-    // The user turn's tile must contain at least one Container with a
-    // non-null BoxDecoration (its background surface); the assistant
-    // turn renders as flat text with no such decorated Container.
+    final userContainers = tester.widgetList<Container>(find.byType(Container));
     expect(
-      userContainer.any((c) => c.decoration != null),
+      userContainers.any((c) => c.decoration != null),
       isTrue,
       reason: 'user turn should have a decorated background container',
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: ChatTurnTile(turn: ChatTurn(role: 'assistant', content: 'Hello')),
+        ),
+      ),
+    );
+    final assistantContainers = tester.widgetList<Container>(find.byType(Container));
+    expect(
+      assistantContainers.any((c) => c.decoration != null),
+      isFalse,
+      reason: 'assistant turn should render as flat text with no decorated background container',
     );
   });
 }

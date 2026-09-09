@@ -34,7 +34,13 @@ class ChatScreen extends ConsumerWidget {
                 : _ConversationList(state: state, controller: controller),
           ),
           ChatComposer(
-            enabled: state is! ChatSending,
+            // Only ChatIdle allows starting a NEW send. ChatSending is the
+            // obvious disable; ChatFailed must ALSO disable — otherwise a
+            // user can type a new message instead of using Retry, which
+            // silently discards the failed message and its optimistic
+            // bubble (sendMessage starts fresh from _rawHistory, and a
+            // successful send replaces the message list wholesale).
+            enabled: state is ChatIdle,
             onSend: controller.sendMessage,
           ),
         ],

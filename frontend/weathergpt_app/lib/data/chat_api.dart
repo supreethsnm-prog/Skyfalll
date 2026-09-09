@@ -14,15 +14,28 @@ class ChatTurn {
   const ChatTurn({required this.role, required this.content});
 
   /// Returns null (rather than throwing) for any entry this app cannot
-  /// safely display: a role other than user/assistant (e.g. 'tool'), or
-  /// non-String content. A future backend response shape change should
-  /// degrade to "this turn doesn't render," never crash the chat screen.
+  /// safely display. The backend (see backend/app/chat/service.py) emits
+  /// two distinct kinds of non-displayable entries alongside real replies:
+  ///   - `role: 'tool'` — a tool RESULT fed back to the model.
+  ///   - `role: 'assistant'` with a `tool_calls` key — a tool-INITIATING
+  ///     turn (the model asking to call a tool). Its `content` is often
+  ///     `""` (a String, not absent) because the model issued a pure tool
+  ///     call with no accompanying text, so a content-type/role check
+  ///     alone is not enough to filter it out — the `tool_calls` key
+  ///     itself is what marks it as non-displayable.
+  /// Also rejected, as defense-in-depth against a future backend change
+  /// that produces blank content some other way: any entry whose content
+  /// is empty or whitespace-only after trimming. A future backend
+  /// response shape change should degrade to "this turn doesn't render,"
+  /// never crash the chat screen.
   static ChatTurn? tryFromRaw(dynamic raw) {
     if (raw is! Map) return null;
     final role = raw['role'];
     final content = raw['content'];
     if (role != 'user' && role != 'assistant') return null;
     if (content is! String) return null;
+    if (raw.containsKey('tool_calls')) return null;
+    if (content.trim().isEmpty) return null;
     return ChatTurn(role: role as String, content: content);
   }
 }
