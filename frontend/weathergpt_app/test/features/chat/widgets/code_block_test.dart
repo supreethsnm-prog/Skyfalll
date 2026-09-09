@@ -32,4 +32,26 @@ void main() {
 
     expect(copied, isTrue);
   });
+
+  testWidgets('the copy affordance announces as a labelled button with a '
+      '40dp tap target', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: CodeBlock(code: 'x', onCopy: () {})),
+      ),
+    );
+
+    final buttonFinder = find.ancestor(
+      of: find.byIcon(Icons.copy_outlined),
+      matching: find.byType(IconButton),
+    );
+
+    final semantics = tester.getSemantics(buttonFinder);
+    expect(semantics.flagsCollection.isButton, isTrue);
+    expect(semantics.label, 'Copy');
+
+    final size = tester.getSize(buttonFinder);
+    expect(size.width, greaterThanOrEqualTo(40));
+    expect(size.height, greaterThanOrEqualTo(40));
+  });
 }

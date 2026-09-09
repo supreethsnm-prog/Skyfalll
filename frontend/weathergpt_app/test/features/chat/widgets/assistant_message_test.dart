@@ -50,4 +50,47 @@ void main() {
 
     expect(find.byIcon(Icons.copy_outlined), findsNothing);
   });
+
+  testWidgets('each action icon announces a button with a label and a 40dp '
+      'tap target', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AssistantMessage(
+            text: 'reply',
+            onCopy: () {},
+            onReadAloud: () {},
+            onShare: () {},
+            onMore: () {},
+          ),
+        ),
+      ),
+    );
+
+    final expected = <MapEntry<IconData, String>>[
+      const MapEntry(Icons.copy_outlined, 'Copy'),
+      const MapEntry(Icons.volume_up_outlined, 'Read aloud'),
+      const MapEntry(Icons.share_outlined, 'Share'),
+      const MapEntry(Icons.more_vert, 'More options'),
+    ];
+
+    for (final entry in expected) {
+      final iconFinder = find.byIcon(entry.key);
+      final buttonFinder = find.ancestor(
+        of: iconFinder,
+        matching: find.byType(IconButton),
+      );
+
+      final semantics = tester.getSemantics(buttonFinder);
+      expect(semantics.flagsCollection.isButton, isTrue,
+          reason: '${entry.value} icon has no button semantics');
+      expect(semantics.label, entry.value);
+
+      final size = tester.getSize(buttonFinder);
+      expect(size.width, greaterThanOrEqualTo(40),
+          reason: '${entry.value} tap target width is ${size.width}');
+      expect(size.height, greaterThanOrEqualTo(40),
+          reason: '${entry.value} tap target height is ${size.height}');
+    }
+  });
 }

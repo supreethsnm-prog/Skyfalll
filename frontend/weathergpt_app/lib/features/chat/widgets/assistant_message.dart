@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 
@@ -72,11 +73,30 @@ class _ActionRow extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (onCopy != null) _ActionIcon(icon: Icons.copy_outlined, onPressed: onCopy!),
+        if (onCopy != null)
+          _ActionIcon(
+            icon: Icons.copy_outlined,
+            label: 'Copy',
+            onPressed: onCopy!,
+          ),
         if (onReadAloud != null)
-          _ActionIcon(icon: Icons.volume_up_outlined, onPressed: onReadAloud!),
-        if (onShare != null) _ActionIcon(icon: Icons.share_outlined, onPressed: onShare!),
-        if (onMore != null) _ActionIcon(icon: Icons.more_vert, onPressed: onMore!),
+          _ActionIcon(
+            icon: Icons.volume_up_outlined,
+            label: 'Read aloud',
+            onPressed: onReadAloud!,
+          ),
+        if (onShare != null)
+          _ActionIcon(
+            icon: Icons.share_outlined,
+            label: 'Share',
+            onPressed: onShare!,
+          ),
+        if (onMore != null)
+          _ActionIcon(
+            icon: Icons.more_vert,
+            label: 'More options',
+            onPressed: onMore!,
+          ),
       ],
     );
   }
@@ -85,20 +105,46 @@ class _ActionRow extends StatelessWidget {
 /// A single small outline action icon in the assistant action row.
 /// Deliberately not a [RoundIconButton] — those are filled chrome
 /// affordances; these are bare outline icons directly on the background.
+///
+/// The glyph itself stays small (matching the reference), but the tap
+/// target is held at [AppRadius.iconButton] (40dp) via `constraints` —
+/// this is a disaster-alert app, so every actionable icon needs both a
+/// screen-reader label and a tap target that clears the accessible
+/// minimum, independent of how small its glyph reads visually. The
+/// label is set via an explicit [Semantics] node (matching
+/// [RoundIconButton]'s approach) rather than [IconButton.tooltip] alone
+/// — that only populates the separate semantics `tooltip` field, not
+/// `label`, which most screen readers announce far less prominently.
 class _ActionIcon extends StatelessWidget {
-  const _ActionIcon({required this.icon, required this.onPressed});
+  const _ActionIcon({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
 
   final IconData icon;
+  final String label;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 20, color: AppColors.textSecondary),
-      splashRadius: 18,
-      padding: const EdgeInsets.all(AppSpacing.xs),
-      constraints: const BoxConstraints(),
+    return Semantics(
+      button: true,
+      enabled: true,
+      label: label,
+      onTap: onPressed,
+      child: ExcludeSemantics(
+        child: IconButton(
+          onPressed: onPressed,
+          tooltip: label,
+          icon: Icon(icon, size: 20, color: AppColors.textSecondary),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(
+            minWidth: AppRadius.iconButton,
+            minHeight: AppRadius.iconButton,
+          ),
+        ),
+      ),
     );
   }
 }

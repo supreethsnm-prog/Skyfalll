@@ -39,14 +39,31 @@ class CodeBlock extends StatelessWidget {
             ),
           ),
           if (onCopy != null)
-            IconButton(
-              onPressed: onCopy,
-              icon: const Icon(Icons.copy_outlined, size: 18),
-              color: AppColors.textSecondary,
-              splashRadius: 16,
-              padding: const EdgeInsets.all(AppSpacing.xs),
-              constraints: const BoxConstraints(),
-              visualDensity: VisualDensity.compact,
+            // Explicit Semantics (matching RoundIconButton's approach)
+            // rather than relying on IconButton.tooltip alone: that only
+            // populates the semantics `tooltip` field, not `label`, which
+            // most screen readers announce far less prominently. The tap
+            // target is held at the 40dp accessible minimum via
+            // `constraints`; the glyph itself stays the reference's
+            // smaller 18dp.
+            Semantics(
+              button: true,
+              enabled: true,
+              label: 'Copy',
+              onTap: onCopy,
+              child: ExcludeSemantics(
+                child: IconButton(
+                  onPressed: onCopy,
+                  tooltip: 'Copy',
+                  icon: const Icon(Icons.copy_outlined, size: 18),
+                  color: AppColors.textSecondary,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: AppRadius.iconButton,
+                    minHeight: AppRadius.iconButton,
+                  ),
+                ),
+              ),
             ),
         ],
       ),

@@ -234,27 +234,43 @@ class _AppMenuRow extends StatelessWidget {
       );
     }
 
-    return InkWell(
-      onTap: () {
-        Navigator.of(context).pop();
-        item.onTap();
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.sm,
-        ),
-        child: Row(
-          children: [
-            icon,
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Text(
-                item.label,
-                style: AppTypography.body(color),
-              ),
+    void activate() {
+      Navigator.of(context).pop();
+      item.onTap();
+    }
+
+    // InkWell contributes no button semantics on its own, so a screen
+    // reader would announce this row as plain, unlabelled text — a menu
+    // row is as actionable as any icon button, and this is a
+    // disaster-alert app. Semantics supplies the role/label explicitly;
+    // ExcludeSemantics stops the InkWell/Text below from adding their own
+    // redundant nodes underneath it.
+    return Semantics(
+      button: true,
+      enabled: true,
+      label: item.label,
+      onTap: activate,
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: activate,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.sm,
             ),
-          ],
+            child: Row(
+              children: [
+                icon,
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                    item.label,
+                    style: AppTypography.body(color),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

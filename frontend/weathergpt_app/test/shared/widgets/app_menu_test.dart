@@ -138,6 +138,20 @@ void main() {
     expect(wells, isEmpty);
   });
 
+  testWidgets('each row announces as a labelled button, not plain text',
+      (tester) async {
+    await tester.pumpWidget(harness([
+      AppMenuItem(icon: Icons.share_outlined, label: 'Share', onTap: () {}),
+    ]));
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    final semantics = tester.getSemantics(find.text('Share'));
+    expect(semantics.flagsCollection.isButton, isTrue);
+    expect(semantics.label, 'Share');
+  });
+
   testWidgets('iconWell items wrap their icon in a filled circle', (tester) async {
     await tester.pumpWidget(harness([
       AppMenuItem(
