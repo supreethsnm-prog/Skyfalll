@@ -18,6 +18,7 @@ import 'widgets/alert_banner.dart';
 import 'widgets/detail_tiles.dart';
 import 'widgets/forecast_panel.dart';
 import 'widgets/home_hero.dart';
+import 'widgets/location_search_sheet.dart';
 
 /// The app's launch screen, modelled on the Google Weather home screen
 /// (`Home1.jpeg`, `Home2.jpeg`): a full-bleed sky reflecting the current
@@ -111,6 +112,12 @@ class _Chrome extends StatelessWidget {
           Row(
             children: [
               RoundIconButton(
+                icon: Icons.search,
+                tooltip: 'Search location',
+                onPressed: () => showLocationSearch(context),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              RoundIconButton(
                 icon: Icons.add,
                 tooltip: 'New chat',
                 onPressed: () => context.go('/chat'),
@@ -133,8 +140,8 @@ class _Chrome extends StatelessWidget {
                       ),
                       AppMenuItem(
                         icon: Icons.place_outlined,
-                        label: 'Saved places',
-                        onTap: () {},
+                        label: 'Change location',
+                        onTap: () => showLocationSearch(context),
                       ),
                       AppMenuItem(
                         icon: Icons.settings_outlined,
@@ -205,11 +212,11 @@ class _LoadedView extends ConsumerWidget {
           ref.read(homeControllerProvider.notifier).useCurrentLocation(),
       color: AppColors.textPrimary,
       backgroundColor: AppColors.surfaceRaised,
-      child: _scrollView(today),
+      child: _scrollView(context, today),
     );
   }
 
-  Widget _scrollView(ForecastDay? today) {
+  Widget _scrollView(BuildContext context, ForecastDay? today) {
     return SingleChildScrollView(
       // Always scrollable, so the pull gesture is available even when the
       // content is short enough to fit — otherwise refresh silently stops
@@ -231,6 +238,7 @@ class _LoadedView extends ConsumerWidget {
             foreground: foreground,
             high: today?.tempMaxC,
             low: today?.tempMinC,
+            onTapPlace: () => showLocationSearch(context),
           ),
           if (state.locationFailure != null) ...[
             const SizedBox(height: AppSpacing.sm),

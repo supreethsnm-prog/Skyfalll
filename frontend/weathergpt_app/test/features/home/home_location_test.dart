@@ -48,9 +48,9 @@ class _FakeAlertsApi implements AlertsApi {
 }
 
 class _FakeGeocodingApi implements GeocodingApi {
-  _FakeGeocodingApi({this.name = 'Pune, Maharashtra', this.fail = false});
+  _FakeGeocodingApi({this.fail = false});
 
-  final String name;
+  static const name = 'Pune, Maharashtra';
   final bool fail;
   int reverseCalls = 0;
 

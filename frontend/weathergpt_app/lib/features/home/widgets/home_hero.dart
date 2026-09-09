@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/weather_api.dart';
@@ -21,6 +22,7 @@ class HomeHero extends StatelessWidget {
     required this.foreground,
     this.high,
     this.low,
+    this.onTapPlace,
   });
 
   final String place;
@@ -32,13 +34,50 @@ class HomeHero extends StatelessWidget {
   final double? high;
   final double? low;
 
+  /// Opens location search. Null leaves the name as a plain label, which
+  /// is what golden tests and any read-only use want.
+  final VoidCallback? onTapPlace;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(place, style: AppTypography.title(foreground)),
+        // The place name doubles as the way to change it — the most
+        // discoverable spot for "somewhere else", and where Google
+        // Weather puts it too. The caret says it is tappable; a bare
+        // label would not.
+        Semantics(
+          button: onTapPlace != null,
+          label: 'Change location. Currently $place',
+          child: ExcludeSemantics(
+            child: InkWell(
+              onTap: onTapPlace,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      place,
+                      style: AppTypography.title(foreground),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (onTapPlace != null) ...[
+                    const SizedBox(width: AppSpacing.xs),
+                    Icon(
+                      Icons.expand_more,
+                      size: AppRadius.iconSize,
+                      color: foreground,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
         const SizedBox(height: AppSpacing.sm),
         // The degree sign rides with the number so they scale together.
         Text(
