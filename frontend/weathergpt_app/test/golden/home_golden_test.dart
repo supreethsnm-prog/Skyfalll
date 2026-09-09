@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/network/app_error.dart';
 import 'package:weathergpt_app/core/theme/app_theme.dart';
+import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
+import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
 import 'package:weathergpt_app/features/home/home_screen.dart';
@@ -146,6 +148,33 @@ class _FakeAirQualityApi implements AirQualityApi {
       super.noSuchMethod(invocation);
 }
 
+/// Pins the hero's place name so goldens never depend on a live
+/// reverse-geocode call.
+class _FixedGeocoding implements GeocodingApi {
+  @override
+  Future<GeocodeResult?> reverse(double lat, double lon) async =>
+      const GeocodeResult(
+        displayName: 'New Delhi, India',
+        latitude: 28.6139,
+        longitude: 77.2090,
+        country: 'India',
+        state: 'Delhi',
+      );
+
+  @override
+  Future<GeocodeResult?> search(String query) async => null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
+
+class _FixedLocation implements DeviceLocation {
+  @override
+  Future<LocationResult> current() async =>
+      const LocationFixed(28.6139, 77.2090);
+}
+
 class _FakeAlertsApi implements AlertsApi {
   _FakeAlertsApi({this.alerts = const []});
 
@@ -183,6 +212,10 @@ Future<void> _pumpHome(
         alertsApiProvider.overrideWithValue(_FakeAlertsApi(alerts: alerts)),
         airQualityApiProvider
             .overrideWithValue(_FakeAirQualityApi(fail: fail)),
+        // Pinned so goldens never depend on a real device fix, and so the
+        // hero always renders the same place name.
+        deviceLocationProvider.overrideWithValue(_FixedLocation()),
+        geocodingApiProvider.overrideWithValue(_FixedGeocoding()),
       ],
       child: MaterialApp(
         theme: AppTheme.dark,

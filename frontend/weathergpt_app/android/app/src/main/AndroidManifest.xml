@@ -1,4 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Home shows weather for wherever the user is. COARSE is enough for
+         city-level weather; FINE is requested alongside it because Android
+         will only grant precise location if it is declared, and some
+         devices report a coarse-only fix as unavailable. The user is still
+         asked, and declining is handled: Home falls back to a default city
+         with an inline note rather than failing. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+
     <application
         android:label="weathergpt_app"
         android:name="${applicationName}"

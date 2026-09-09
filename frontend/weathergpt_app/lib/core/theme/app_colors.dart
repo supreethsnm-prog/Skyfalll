@@ -54,17 +54,42 @@ class AppColors {
   static const _severitySevere = Color(0xFFC23B4B);
   static const _severityExtreme = Color(0xFF8F2836);
 
+  /// Colour for an alert's severity.
+  ///
+  /// Accepts THREE vocabularies, because the live feed uses all of them:
+  ///
+  /// - CAP standard: minor / moderate / severe / extreme.
+  /// - IMD colour codes: green / yellow / orange / red. This is what most
+  ///   SACHET rows actually carry.
+  /// - SACHET levels: watch / alert / warning.
+  ///
+  /// The first version of this only knew the CAP words, so every real
+  /// alert — all of which say "Yellow", "Orange", "Watch" or "Alert" —
+  /// fell through to the default and rendered identically. Check live
+  /// data before trusting a severity vocabulary.
+  ///
+  /// Mapping follows IMD's own published meanings: yellow = watch (be
+  /// updated), orange = alert (be prepared), red = warning (take action).
   static Color alertSeverity(String? capSeverity) {
-    switch (capSeverity?.toLowerCase()) {
+    switch (capSeverity?.toLowerCase().trim()) {
       case 'minor':
+      case 'green':
         return _severityMinor;
       case 'moderate':
+      case 'yellow':
+      case 'watch':
         return _severityModerate;
       case 'severe':
+      case 'orange':
+      case 'alert':
         return _severitySevere;
       case 'extreme':
+      case 'red':
+      case 'warning':
         return _severityExtreme;
       default:
+        // An unrecognised severity is treated as significant rather than
+        // trivial: under-warning is the dangerous direction.
         return _severityModerate;
     }
   }

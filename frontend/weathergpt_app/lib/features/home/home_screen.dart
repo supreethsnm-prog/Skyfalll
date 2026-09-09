@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/location/device_location.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -203,6 +205,13 @@ class _LoadedView extends StatelessWidget {
             high: today?.tempMaxC,
             low: today?.tempMinC,
           ),
+          if (state.locationFailure != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _LocationNotice(
+              failure: state.locationFailure!,
+              foreground: foreground,
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
           AqiPill(airQuality: state.airQuality, foreground: foreground),
           const SizedBox(height: AppSpacing.xxl),
@@ -235,6 +244,73 @@ class _LoadedView extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Shown when Home fell back to the default city because the device's
+/// location was unavailable. Deliberately a quiet inline note, not a
+/// blocking dialog: the weather on screen is real and useful, it is just
+/// not for here.
+class _LocationNotice extends ConsumerWidget {
+  const _LocationNotice({required this.failure, required this.foreground});
+
+  final LocationFailure failure;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Each case gets the remedy that actually works. Re-prompting after a
+    // permanent denial silently no-ops at the OS level, so that case must
+    // send the user to settings instead.
+    final (String message, String action) = switch (failure) {
+      LocationFailure.serviceDisabled => (
+          'Location is turned off.',
+          'Settings',
+        ),
+      LocationFailure.permissionDeniedForever => (
+          'Location permission is blocked.',
+          'Settings',
+        ),
+      LocationFailure.permissionDenied => (
+          'Showing New Delhi.',
+          'Use my location',
+        ),
+      LocationFailure.unavailable => (
+          "Couldn't get a location fix.",
+          'Retry',
+        ),
+    };
+
+    final sendToSettings = failure == LocationFailure.serviceDisabled ||
+        failure == LocationFailure.permissionDeniedForever;
+
+    return Row(
+      children: [
+        Icon(Icons.location_off_outlined, size: 16, color: foreground),
+        const SizedBox(width: AppSpacing.sm),
+        Flexible(
+          child: Text(
+            message,
+            style: AppTypography.caption(foreground),
+          ),
+        ),
+        TextButton(
+          onPressed: () {
+            if (sendToSettings) {
+              Geolocator.openAppSettings();
+            } else {
+              ref.read(homeControllerProvider.notifier).useCurrentLocation();
+            }
+          },
+          style: TextButton.styleFrom(
+            foregroundColor: foreground,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            minimumSize: const Size(0, 32),
+          ),
+          child: Text(action, style: AppTypography.caption(foreground)),
+        ),
+      ],
     );
   }
 }

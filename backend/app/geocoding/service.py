@@ -85,3 +85,65 @@ def geocode_place(
     # A concurrent request already inserted this query between our cache
     # check and this insert. Don't overwrite it — re-read what's there.
     return _to_response(_read_cached(engine, normalized_query))
+
+
+# Reverse lookups are cached under a ROUNDED coordinate, not the raw one.
+# Two decimal places is ~1.1km — far finer than the city-level name being
+# looked up, but coarse enough that a phone's GPS jitter does not trigger
+# a fresh Nominatim call on every refresh. Their usage policy caps
+# scripted use at ~4 requests/minute, so this matters.
+_REVERSE_PRECISION = 2
+
+
+def _reverse_cache_key(latitude: float, longitude: float) -> str:
+    # The "@" prefix keeps reverse entries from ever colliding with a
+    # forward query, which is a user-typed place name.
+    lat = round(latitude, _REVERSE_PRECISION)
+    lon = round(longitude, _REVERSE_PRECISION)
+    return f"@{lat},{lon}"
+
+
+def reverse_geocode_point(
+    latitude: float, longitude: float, provider: GeocodingProvider | None = None
+) -> dict | None:
+    """Name a coordinate, cached permanently like a forward lookup.
+
+    Returns None when Nominatim has no match — an ocean coordinate has no
+    place name, and that is a legitimate answer rather than an error.
+    """
+    cache_key = _reverse_cache_key(latitude, longitude)
+
+    engine = get_engine()
+
+    row = _read_cached(engine, cache_key)
+    if row is not None:
+        return _to_response(row)
+
+    result = (provider or NominatimGeocodingProvider()).reverse(latitude, longitude)
+    if result is None:
+        return None
+
+    fetched_at = datetime.now(timezone.utc)
+
+    with engine.begin() as conn:
+        stmt = pg_insert(GeocodeCache).values(
+            query=cache_key,
+            display_name=result.display_name,
+            # The caller's own coordinates, so weather is fetched for
+            # where the user is rather than a district centroid.
+            latitude=result.latitude,
+            longitude=result.longitude,
+            country=result.country,
+            state=result.state,
+            raw_payload=result.raw_payload,
+            fetched_at=fetched_at,
+        )
+        stmt = stmt.on_conflict_do_nothing(
+            index_elements=[GeocodeCache.query]
+        ).returning(GeocodeCache)
+        inserted_row = conn.execute(stmt).mappings().first()
+
+    if inserted_row is not None:
+        return _to_response(inserted_row)
+
+    return _to_response(_read_cached(engine, cache_key))

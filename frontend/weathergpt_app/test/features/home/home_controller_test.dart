@@ -1,10 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/core/network/app_error.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
+
+/// Reports no fix, so the controller falls back to its default city.
+class _NoDeviceFix implements DeviceLocation {
+  const _NoDeviceFix();
+
+  @override
+  Future<LocationResult> current() async =>
+      const LocationUnavailable(LocationFailure.permissionDenied);
+}
 
 const _sampleWeather = CurrentWeather(
   temperatureC: 32.0,
@@ -78,6 +88,9 @@ void main() {
   late FakeAlertsApi fakeAlertsApi;
   late ProviderContainer container;
 
+  // Declared here rather than in test/support so these tests stay
+  // self-contained: they deliberately exercise the no-fix path.
+
   setUp(() {
     fakeWeatherApi = FakeWeatherApi()..nextWeather = _sampleWeather;
     fakeAlertsApi = FakeAlertsApi()..nextAlerts = [_nearbyAlert, _farAlert, _noCoordsAlert];
@@ -85,6 +98,14 @@ void main() {
       overrides: [
         weatherApiProvider.overrideWithValue(fakeWeatherApi),
         alertsApiProvider.overrideWithValue(fakeAlertsApi),
+        // loadInitial() now asks the device for its position first. These
+        // tests are about the fetch-and-filter logic, not location, so
+        // the device reports no fix and the controller falls back to its
+        // default city — which is the coordinate every assertion below
+        // was already written against.
+        deviceLocationProvider.overrideWithValue(
+          const _NoDeviceFix(),
+        ),
       ],
     );
   });

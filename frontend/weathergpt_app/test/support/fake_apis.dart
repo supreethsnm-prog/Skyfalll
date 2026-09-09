@@ -1,4 +1,6 @@
+import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/data/air_quality_api.dart';
+import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
@@ -68,6 +70,41 @@ class FakeAlertsApi implements AlertsApi {
       super.noSuchMethod(invocation);
 }
 
+/// Device location that reports no fix, so tests exercise the default-city
+/// path without touching the geolocator plugin — which is not available in
+/// a widget test and throws MissingPluginException if reached.
+class FakeDeviceLocation implements DeviceLocation {
+  const FakeDeviceLocation([this.result = const LocationFixed(28.6139, 77.2090)]);
+
+  final LocationResult result;
+
+  @override
+  Future<LocationResult> current() async => result;
+}
+
+/// Names any coordinate as the default city, so Home's hero renders a
+/// stable place name without a network call.
+class FakeGeocodingApi implements GeocodingApi {
+  const FakeGeocodingApi();
+
+  @override
+  Future<GeocodeResult?> reverse(double lat, double lon) async =>
+      const GeocodeResult(
+        displayName: 'New Delhi, India',
+        latitude: 28.6139,
+        longitude: 77.2090,
+        country: 'India',
+        state: 'Delhi',
+      );
+
+  @override
+  Future<GeocodeResult?> search(String query) async => null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
+
 /// Drop-in overrides for any `ProviderScope` mounting `HomeScreen`.
 ///
 /// The return type is inferred rather than written out: Riverpod 3 does
@@ -77,4 +114,6 @@ final fakeApiOverrides = [
   weatherApiProvider.overrideWithValue(FakeWeatherApi()),
   alertsApiProvider.overrideWithValue(FakeAlertsApi()),
   airQualityApiProvider.overrideWithValue(FakeAirQualityApi()),
+  deviceLocationProvider.overrideWithValue(const FakeDeviceLocation()),
+  geocodingApiProvider.overrideWithValue(const FakeGeocodingApi()),
 ];

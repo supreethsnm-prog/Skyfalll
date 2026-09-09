@@ -30,7 +30,7 @@ from app.config import get_settings
 from app.db import check_db_connection
 from app.air_quality.service import get_air_quality
 from app.forecast.service import get_forecast
-from app.geocoding.service import geocode_place
+from app.geocoding.service import geocode_place, reverse_geocode_point
 from app.history.service import get_historical_weather
 from app.ingestion.alerts import ingest_alerts
 from app.ingestion.gfs import ingest_gfs_forecast
@@ -212,6 +212,23 @@ def get_forecast_endpoint(
 @app.get("/geocode")
 def geocode_endpoint(q: str = Query(..., min_length=1)) -> dict:
     result = geocode_place(q)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Location not found")
+    return result
+
+
+@app.get("/reverse-geocode")
+def reverse_geocode_endpoint(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+) -> dict:
+    """Name a coordinate, for showing the device's own location on Home.
+
+    404 (not 500) when the point has no place name — mid-ocean
+    coordinates legitimately have none, and the client treats that as
+    "unnamed location" rather than as a failure. Mirrors /geocode.
+    """
+    result = reverse_geocode_point(lat, lon)
     if result is None:
         raise HTTPException(status_code=404, detail="Location not found")
     return result

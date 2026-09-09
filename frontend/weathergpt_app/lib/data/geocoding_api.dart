@@ -50,4 +50,23 @@ class GeocodingApi {
       rethrow;
     }
   }
+
+  /// Names a coordinate, for showing the device's own location on Home.
+  ///
+  /// Returns null on 404 — a point with no place name (mid-ocean, say) is
+  /// a legitimate answer, not a failure. Mirrors [search]'s handling.
+  Future<GeocodeResult?> reverse(double lat, double lon) async {
+    try {
+      return await guardApi(() async {
+        final response = await _dio.get<Map<String, dynamic>>(
+          '/reverse-geocode',
+          queryParameters: {'lat': lat, 'lon': lon},
+        );
+        return GeocodeResult.fromJson(response.data!);
+      });
+    } on ServerError catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
 }
