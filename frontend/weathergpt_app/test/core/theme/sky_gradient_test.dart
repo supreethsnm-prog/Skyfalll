@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:weathergpt_app/core/theme/app_colors.dart';
 import 'package:weathergpt_app/core/theme/sky_gradient.dart';
+
+/// WCAG relative contrast ratio between two opaque colours.
+double _ratio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final brighter = la > lb ? la : lb;
+  final darker = la > lb ? lb : la;
+  return (brighter + 0.05) / (darker + 0.05);
+}
 
 void main() {
   group('skyTimeOfDayFor', () {
@@ -68,6 +78,97 @@ void main() {
             .map((c) => c.computeLuminance())
             .reduce((a, b) => a + b);
         expect(day, greaterThan(night), reason: condition.toString());
+      }
+    });
+  });
+
+  group('skyForeground', () {
+    // White type washes out on the light dawn/day skies sampled from the
+    // Google Weather reference, so Home flips to near-black over them.
+    test('is dark on the light day and dawn skies', () {
+      for (final time in [SkyTimeOfDay.day, SkyTimeOfDay.dawn]) {
+        for (final condition in [SkyCondition.clear, SkyCondition.cloudy]) {
+          expect(skyForeground(time, condition), AppColors.bgBase,
+              reason: '$time/$condition is a light sky');
+        }
+      }
+    });
+
+    test('is white on every night sky', () {
+      for (final condition in SkyCondition.values) {
+        expect(skyForeground(SkyTimeOfDay.night, condition),
+            AppColors.textPrimary,
+            reason: 'night/$condition');
+      }
+    });
+
+    test('always picks the better-contrasting of the two foregrounds', () {
+      // Guards against the picker being inverted: whichever colour it
+      // returns must score at least as well, at the gradient's weakest
+      // stop, as the one it rejected.
+      for (final time in SkyTimeOfDay.values) {
+        for (final condition in SkyCondition.values) {
+          final stops = skyGradient(time, condition).colors;
+          double worst(Color fg) => stops
+              .map((s) => _ratio(s, fg))
+              .reduce((a, b) => a < b ? a : b);
+
+          final chosen = skyForeground(time, condition);
+          final rejected = chosen == AppColors.textPrimary
+              ? AppColors.bgBase
+              : AppColors.textPrimary;
+
+          expect(worst(chosen), greaterThanOrEqualTo(worst(rejected)),
+              reason: '$time/$condition picked the worse foreground');
+        }
+      }
+    });
+
+    // KNOWN GAP, deliberately encoded rather than hidden. These skies are
+    // mid-tone: neither black nor white clears WCAG AA (4.5:1) at every
+    // stop, so no choice of foreground alone fixes them. Resolving it
+    // means changing the gradients themselves (a visual decision pending
+    // with the user) or giving Home's text a scrim. Until then this list
+    // is a ratchet: any sky NOT on it must clear 4.5:1, and the list may
+    // only shrink — a new entry means a gradient regressed.
+    const knownBelowAA = {
+      (SkyTimeOfDay.dawn, SkyCondition.rain),
+      (SkyTimeOfDay.day, SkyCondition.rain),
+      (SkyTimeOfDay.day, SkyCondition.thunderstorm),
+      (SkyTimeOfDay.dusk, SkyCondition.clear),
+      (SkyTimeOfDay.dusk, SkyCondition.cloudy),
+      (SkyTimeOfDay.dusk, SkyCondition.rain),
+      (SkyTimeOfDay.dusk, SkyCondition.snow),
+    };
+
+    test('every sky outside the known-gap list clears WCAG AA', () {
+      for (final time in SkyTimeOfDay.values) {
+        for (final condition in SkyCondition.values) {
+          if (knownBelowAA.contains((time, condition))) continue;
+
+          final fg = skyForeground(time, condition);
+          for (final stop in skyGradient(time, condition).colors) {
+            expect(_ratio(stop, fg), greaterThanOrEqualTo(4.5),
+                reason: '$time/$condition stop $stop vs $fg');
+          }
+        }
+      }
+    });
+
+    test('every sky on the known-gap list really is below AA', () {
+      // Keeps the exception list honest: once a gradient is fixed, this
+      // fails until it is removed from the list, so the gap cannot be
+      // silently carried forever.
+      for (final (time, condition) in knownBelowAA) {
+        final fg = skyForeground(time, condition);
+        final worst = skyGradient(time, condition)
+            .colors
+            .map((s) => _ratio(s, fg))
+            .reduce((a, b) => a < b ? a : b);
+
+        expect(worst, lessThan(4.5),
+            reason: '$time/$condition now clears AA — remove it from '
+                'knownBelowAA');
       }
     });
   });

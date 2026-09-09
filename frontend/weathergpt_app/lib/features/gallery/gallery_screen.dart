@@ -343,11 +343,16 @@ class _SkySection extends StatelessWidget {
                           children: [
                             Text(
                               '24°',
-                              style:
-                                  AppTypography.title(AppColors.textPrimary),
+                              style: AppTypography.title(
+                                skyForeground(time, condition),
+                              ),
                             ),
                             const Spacer(),
-                            const GlassPanel(child: _ForecastRows()),
+                            GlassPanel(
+                              child: _ForecastRows(
+                                foreground: skyForeground(time, condition),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -365,7 +370,10 @@ class _SkySection extends StatelessWidget {
 /// Sample content inside the glass panels — shaped like the Home
 /// forecast rows so the panel is judged at a realistic density.
 class _ForecastRows extends StatelessWidget {
-  const _ForecastRows();
+  const _ForecastRows({required this.foreground});
+
+  /// Comes from [skyForeground] so the rows stay legible on light skies.
+  final Color foreground;
 
   @override
   Widget build(BuildContext context) {
@@ -386,14 +394,14 @@ class _ForecastRows extends StatelessWidget {
                   width: 40,
                   child: Text(
                     day,
-                    style: AppTypography.label(AppColors.textPrimary),
+                    style: AppTypography.label(foreground),
                   ),
                 ),
-                Icon(icon, size: 20, color: AppColors.textPrimary),
+                Icon(icon, size: 20, color: foreground),
                 const Spacer(),
                 Text(
                   temps,
-                  style: AppTypography.label(AppColors.textPrimary),
+                  style: AppTypography.label(foreground),
                 ),
               ],
             ),

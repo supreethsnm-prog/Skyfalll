@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_colors.dart';
+
 /// Broad time-of-day bucket used to pick a sky gradient for the Home
 /// screen background. Derived from the device clock against the
 /// location's `timezone` (see docs/superpowers/specs/
@@ -213,4 +215,38 @@ LinearGradient skyGradient(SkyTimeOfDay time, SkyCondition condition) {
     end: Alignment.bottomCenter,
     colors: colors,
   );
+}
+
+/// Returns the text/icon colour to use on top of a given sky.
+///
+/// Dawn and day skies are light enough that white type washes out, so
+/// Home flips to near-black over them — the same thing Google Weather
+/// does in the reference. Rather than hardcoding that per time-of-day
+/// (which breaks the moment a dark condition lands in a light bucket,
+/// e.g. day + thunderstorm), this picks whichever of the two foregrounds
+/// has the better WCAG contrast ratio against the sky's own **worst**
+/// stop, so the answer stays correct for all 24 combinations and for any
+/// gradient added later.
+///
+/// Mirrors the approach already used by `AppColors.onAlertSeverity`.
+Color skyForeground(SkyTimeOfDay time, SkyCondition condition) {
+  final colors = _skyGradients[time]![condition]!;
+
+  // Score against the stop where each candidate reads worst: text spans
+  // the whole gradient, so the weakest point is what decides legibility.
+  double worst(Color foreground) => colors
+      .map((stop) => _contrastRatio(stop, foreground))
+      .reduce((a, b) => a < b ? a : b);
+
+  return worst(AppColors.textPrimary) >= worst(AppColors.bgBase)
+      ? AppColors.textPrimary
+      : AppColors.bgBase;
+}
+
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final brighter = la > lb ? la : lb;
+  final darker = la > lb ? lb : la;
+  return (brighter + 0.05) / (darker + 0.05);
 }
