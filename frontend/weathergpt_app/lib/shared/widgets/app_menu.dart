@@ -32,10 +32,6 @@ class AppMenuItem {
   final bool iconWell;
 }
 
-/// Diameter of the icon well circle used when [AppMenuItem.iconWell] is
-/// set, per spec §4.5.
-const double _iconWellSize = 40;
-
 /// Shows the shared chrome menu: a fixed-width, rounded, dark panel with
 /// an optional header line followed by icon + label rows. Serves both
 /// the chat/home overflow dropdown and the composer's attach menu — the
@@ -46,22 +42,7 @@ Future<void> showAppMenu({
   String? header,
   RelativeRect? position,
 }) {
-  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-  final buttonBox = context.findRenderObject() as RenderBox?;
-
-  final effectivePosition = position ??
-      (buttonBox != null
-          ? RelativeRect.fromRect(
-              Rect.fromPoints(
-                buttonBox.localToGlobal(Offset.zero, ancestor: overlay),
-                buttonBox.localToGlobal(
-                  buttonBox.size.bottomRight(Offset.zero),
-                  ancestor: overlay,
-                ),
-              ),
-              Offset.zero & overlay.size,
-            )
-          : const RelativeRect.fromLTRB(0, 0, 0, 0));
+  final effectivePosition = position ?? _anchorOnLauncher(context);
 
   return Navigator.of(context).push(
     _AppMenuRoute(
@@ -69,6 +50,26 @@ Future<void> showAppMenu({
       items: items,
       header: header,
     ),
+  );
+}
+
+/// Builds the menu's anchor rect from the widget that opened it, so the
+/// dropdown hangs off its own button. Only called when the caller gave no
+/// explicit [RelativeRect] — a caller that supplies one needs no Overlay.
+RelativeRect _anchorOnLauncher(BuildContext context) {
+  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  final buttonBox = context.findRenderObject() as RenderBox?;
+  if (buttonBox == null) return const RelativeRect.fromLTRB(0, 0, 0, 0);
+
+  return RelativeRect.fromRect(
+    Rect.fromPoints(
+      buttonBox.localToGlobal(Offset.zero, ancestor: overlay),
+      buttonBox.localToGlobal(
+        buttonBox.size.bottomRight(Offset.zero),
+        ancestor: overlay,
+      ),
+    ),
+    Offset.zero & overlay.size,
   );
 }
 
@@ -123,13 +124,8 @@ class _AppMenuLayoutDelegate extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
-    final left = position.left;
-    final top = position.top;
-    final containerWidth = size.width - position.left - position.right;
-    final containerHeight = size.height - position.top - position.bottom;
-
-    double dx = left;
-    double dy = top;
+    double dx = position.left;
+    double dy = position.top;
 
     // Keep the menu on-screen, anchored to the button's rect.
     if (dx + childSize.width > size.width - AppSpacing.sm) {
@@ -144,9 +140,6 @@ class _AppMenuLayoutDelegate extends SingleChildLayoutDelegate {
     if (dy < AppSpacing.sm) {
       dy = AppSpacing.sm;
     }
-
-    // Unused, but keeps container size referenced for clarity/lints.
-    assert(containerWidth >= 0 && containerHeight >= 0);
 
     return Offset(dx, dy);
   }
@@ -212,9 +205,11 @@ class _AppMenuRow extends StatelessWidget {
     Widget icon = Icon(item.icon, size: 20, color: color);
 
     if (item.iconWell) {
+      // The attach menu's wells are the same 40dp as every other round
+      // chrome affordance — one token, not a coincidence (spec §4.5).
       icon = Container(
-        width: _iconWellSize,
-        height: _iconWellSize,
+        width: AppRadius.iconButton,
+        height: AppRadius.iconButton,
         decoration: const BoxDecoration(
           shape: BoxShape.circle,
           color: AppColors.surfaceIconWell,
