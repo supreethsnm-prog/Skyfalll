@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/sky_gradient.dart';
+import '../../data/weather_api.dart';
 import '../../shared/error_message.dart';
 import '../shell/app_drawer.dart';
 import '../../shared/widgets/app_menu.dart';
@@ -164,10 +165,19 @@ class _Body extends ConsumerWidget {
       HomeLoading() => Center(
         child: CircularProgressIndicator(color: foreground),
       ),
-      HomeError(:final error) => _ErrorView(
-        message: errorMessageFor(error),
-        foreground: foreground,
-        onRetry: () => ref.read(homeControllerProvider.notifier).retry(),
+      // Also pull-to-refresh: a failed load is exactly when someone
+      // reaches for the gesture, and having it work only on success
+      // would be backwards.
+      HomeError(:final error) => RefreshIndicator(
+        onRefresh: () =>
+            ref.read(homeControllerProvider.notifier).useCurrentLocation(),
+        color: AppColors.textPrimary,
+        backgroundColor: AppColors.surfaceRaised,
+        child: _ErrorView(
+          message: errorMessageFor(error),
+          foreground: foreground,
+          onRetry: () => ref.read(homeControllerProvider.notifier).retry(),
+        ),
       ),
       HomeLoaded() => _LoadedView(
         state: state as HomeLoaded,
@@ -177,17 +187,34 @@ class _Body extends ConsumerWidget {
   }
 }
 
-class _LoadedView extends StatelessWidget {
+class _LoadedView extends ConsumerWidget {
   const _LoadedView({required this.state, required this.foreground});
 
   final HomeLoaded state;
   final Color foreground;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final today = state.forecast.isNotEmpty ? state.forecast.first : null;
 
+    return RefreshIndicator(
+      // Re-resolves the device position as well as the data: on a screen
+      // whose whole premise is "weather where you are", a pull that kept
+      // a stale position after the user has moved would be wrong.
+      onRefresh: () =>
+          ref.read(homeControllerProvider.notifier).useCurrentLocation(),
+      color: AppColors.textPrimary,
+      backgroundColor: AppColors.surfaceRaised,
+      child: _scrollView(today),
+    );
+  }
+
+  Widget _scrollView(ForecastDay? today) {
     return SingleChildScrollView(
+      // Always scrollable, so the pull gesture is available even when the
+      // content is short enough to fit — otherwise refresh silently stops
+      // working on large screens.
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
         // Clears the floating chrome above.
@@ -329,8 +356,10 @@ class _ErrorView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Scrollable so a long message on a short screen degrades into
-    // scrolling rather than a layout overflow.
+    // scrolling rather than a layout overflow — and so the enclosing
+    // RefreshIndicator has a scrollable to hang its pull gesture on.
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Container(
         constraints: BoxConstraints(
           minHeight: MediaQuery.of(context).size.height * 0.6,
