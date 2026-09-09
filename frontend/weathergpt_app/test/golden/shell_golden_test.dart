@@ -116,7 +116,7 @@ void main() {
         theme: AppTheme.dark,
         debugShowCheckedModeBanner: false,
         home: const Scaffold(
-          drawer: AppDrawer(recents: [
+          drawer: AppDrawer(activeRoute: '/chat', recents: [
             'Rain forecast for Pune this week',
             'Cyclone risk on the Odisha coast',
             'Is it safe to sow now?',

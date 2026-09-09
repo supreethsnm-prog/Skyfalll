@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -104,34 +105,44 @@ class _Chrome extends StatelessWidget {
             tooltip: 'Open menu',
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
-          Builder(
-            builder: (context) => RoundIconButton(
-              icon: Icons.more_vert,
-              tooltip: 'More options',
-              onPressed: () => showAppMenu(
-                context: context,
-                // Home shows a reduced set: most of the reference menu's
-                // items (Pin, Archive, Find in chat) are chat-context and
-                // meaningless here.
-                items: [
-                  AppMenuItem(
-                    icon: Icons.ios_share,
-                    label: 'Share',
-                    onTap: () {},
-                  ),
-                  AppMenuItem(
-                    icon: Icons.place_outlined,
-                    label: 'Saved places',
-                    onTap: () {},
-                  ),
-                  AppMenuItem(
-                    icon: Icons.settings_outlined,
-                    label: 'Settings',
-                    onTap: () {},
-                  ),
-                ],
+          Row(
+            children: [
+              RoundIconButton(
+                icon: Icons.add,
+                tooltip: 'New chat',
+                onPressed: () => context.go('/chat'),
               ),
-            ),
+              const SizedBox(width: AppSpacing.sm),
+              Builder(
+                builder: (context) => RoundIconButton(
+                  icon: Icons.more_vert,
+                  tooltip: 'More options',
+                  onPressed: () => showAppMenu(
+                    context: context,
+                    // Home shows a reduced set: most of the reference menu's
+                    // items (Pin, Archive, Find in chat) are chat-context and
+                    // meaningless here.
+                    items: [
+                      AppMenuItem(
+                        icon: Icons.ios_share,
+                        label: 'Share',
+                        onTap: () {},
+                      ),
+                      AppMenuItem(
+                        icon: Icons.place_outlined,
+                        label: 'Saved places',
+                        onTap: () {},
+                      ),
+                      AppMenuItem(
+                        icon: Icons.settings_outlined,
+                        label: 'Settings',
+                        onTap: () {},
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -149,15 +160,17 @@ class _Body extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return switch (state) {
       HomeLoading() => Center(
-          child: CircularProgressIndicator(color: foreground),
-        ),
+        child: CircularProgressIndicator(color: foreground),
+      ),
       HomeError(:final error) => _ErrorView(
-          message: errorMessageFor(error),
-          foreground: foreground,
-          onRetry: () => ref.read(homeControllerProvider.notifier).retry(),
-        ),
-      HomeLoaded() =>
-        _LoadedView(state: state as HomeLoaded, foreground: foreground),
+        message: errorMessageFor(error),
+        foreground: foreground,
+        onRetry: () => ref.read(homeControllerProvider.notifier).retry(),
+      ),
+      HomeLoaded() => _LoadedView(
+        state: state as HomeLoaded,
+        foreground: foreground,
+      ),
     };
   }
 }

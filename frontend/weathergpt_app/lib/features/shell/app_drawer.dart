@@ -16,7 +16,15 @@ import '../../shared/widgets/round_icon_button.dart';
 /// not a raised surface in the reference, it is the same true black with
 /// the content simply sliding over it.
 class AppDrawer extends StatelessWidget {
-  const AppDrawer({super.key, this.recents = const []});
+  const AppDrawer({
+    super.key,
+    this.recents = const [],
+    this.activeRoute = '/home',
+  });
+
+  /// Which destination is currently open, so it can be marked selected —
+  /// the reference sidebar always shows where you are.
+  final String activeRoute;
 
   /// Previous conversation titles. Nothing persists chat history yet, so
   /// this is normally empty and the section shows an honest empty state
@@ -38,13 +46,12 @@ class AppDrawer extends StatelessWidget {
             const _DrawerHeader(),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(
-                  vertical: AppSpacing.sm,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                 children: [
                   _NavEntry(
                     icon: Icons.wb_sunny_outlined,
                     label: 'Home',
+                    selected: activeRoute == '/home',
                     onTap: () {
                       Navigator.of(context).pop();
                       context.go('/home');
@@ -53,6 +60,7 @@ class AppDrawer extends StatelessWidget {
                   _NavEntry(
                     icon: Icons.add_comment_outlined,
                     label: 'New chat',
+                    selected: activeRoute == '/chat',
                     onTap: () {
                       Navigator.of(context).pop();
                       context.go('/chat');
@@ -166,42 +174,59 @@ class _NavEntry extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.selected = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
+  /// The current destination gets a filled pill, as in the reference —
+  /// the sidebar should always say where you are.
+  final bool selected;
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
+      selected: selected,
       label: label,
       child: ExcludeSemantics(
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.md,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  icon,
-                  size: AppRadius.iconSize,
-                  color: AppColors.textPrimary,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: 2,
+          ),
+          child: Material(
+            color: selected ? AppColors.surfaceRaised : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.menu),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.md,
                 ),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: AppTypography.body(AppColors.textPrimary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                child: Row(
+                  children: [
+                    Icon(
+                      icon,
+                      size: AppRadius.iconSize,
+                      color: AppColors.textPrimary,
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: AppTypography.body(AppColors.textPrimary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
