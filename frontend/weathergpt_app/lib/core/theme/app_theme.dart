@@ -3,81 +3,60 @@ import 'app_colors.dart';
 import 'app_radius.dart';
 import 'app_typography.dart';
 
-/// Builds the app's light and dark [ThemeData]. Tonal elevation
-/// (Material 3's surface-tint model) is the primary elevation cue; real
-/// drop shadows are reserved for genuinely floating surfaces (dialogs,
-/// bottom sheets) rather than applied per-card — hence `cardTheme`
-/// below sets elevation to 0 and relies on a surface-color shift alone.
+/// Dark-only for this build. Light mode is deliberately deferred, but
+/// every token is resolved through this theme rather than hardcoded in
+/// widgets, so adding a light palette later is additive.
 class AppTheme {
   AppTheme._();
 
-  static ThemeData get light => _build(
-        brightness: Brightness.light,
-        background: AppColors.cloudlight,
-        surface: Colors.white,
-        textPrimary: AppColors.lightTextPrimary,
-        textSecondary: AppColors.lightTextSecondary,
-      );
-
-  static ThemeData get dark => _build(
-        brightness: Brightness.dark,
-        background: AppColors.monsoonInk,
-        surface: AppColors.stormSlate,
-        textPrimary: AppColors.darkTextPrimary,
-        textSecondary: AppColors.darkTextSecondary,
-      );
-
-  static ThemeData _build({
-    required Brightness brightness,
-    required Color background,
-    required Color surface,
-    required Color textPrimary,
-    required Color textSecondary,
-  }) {
-    // fromSeed().copyWith(...) rather than ColorScheme(...) directly —
-    // it fills in every Material 3 role Flutter's algorithm expects,
-    // and copyWith only overrides the specific roles this palette cares
-    // about, so this doesn't depend on knowing ColorScheme's full
-    // constructor signature for the pinned Flutter version.
+  static ThemeData get dark {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.marigold,
-      brightness: brightness,
+      seedColor: AppColors.accent,
+      brightness: Brightness.dark,
     ).copyWith(
-      primary: AppColors.marigold,
-      onPrimary: AppColors.monsoonInk,
-      secondary: AppColors.paddyGreen,
-      onSecondary: Colors.white,
-      error: AppColors.alertCrimson,
-      onError: Colors.white,
-      surface: surface,
-      onSurface: textPrimary,
+      primary: AppColors.accent,
+      onPrimary: AppColors.textPrimary,
+      surface: AppColors.bgBase,
+      onSurface: AppColors.textPrimary,
+      surfaceContainerHighest: AppColors.surfaceRaised,
+      outline: AppColors.divider,
+      error: AppColors.destructive,
     );
 
     return ThemeData(
       useMaterial3: true,
-      brightness: brightness,
+      brightness: Brightness.dark,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: background,
-      fontFamily: 'Inter',
+      scaffoldBackgroundColor: AppColors.bgBase,
+      canvasColor: AppColors.bgBase,
+      fontFamily: AppTypography.sans,
       textTheme: TextTheme(
-        displayLarge: AppTypography.display(textPrimary),
-        headlineMedium: AppTypography.headline(textPrimary),
-        titleMedium: AppTypography.title(textPrimary),
-        bodyLarge: AppTypography.bodyLarge(textPrimary),
-        bodyMedium: AppTypography.body(textPrimary),
-        bodySmall: AppTypography.caption(textSecondary),
+        displayLarge: AppTypography.hero(AppColors.textPrimary),
+        headlineLarge: AppTypography.wordmark(AppColors.textPrimary),
+        titleLarge: AppTypography.title(AppColors.textPrimary),
+        bodyLarge: AppTypography.body(AppColors.textPrimary),
+        bodyMedium: AppTypography.body(AppColors.textPrimary),
+        labelLarge: AppTypography.label(AppColors.textSecondary),
+        bodySmall: AppTypography.caption(AppColors.textSecondary),
       ),
-      cardTheme: CardThemeData(
+      dividerColor: AppColors.divider,
+      // Chrome floats directly on the background — no toolbar surface.
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        color: surface,
+        scrolledUnderElevation: 0,
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: AppColors.surfaceRaised,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.surface),
+          borderRadius: BorderRadius.circular(AppRadius.menu),
         ),
       ),
-      chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.control),
-        ),
+      drawerTheme: const DrawerThemeData(
+        backgroundColor: AppColors.bgBase,
+        surfaceTintColor: Colors.transparent,
       ),
     );
   }

@@ -1,74 +1,59 @@
 import 'package:flutter/material.dart';
 
-/// WeatherGPT's type scale: Sora for display/headline/title, Inter for
-/// body/UI text, IBMPlexMono for raw meteorological codes (METAR
-/// strings, coordinates) only — never as a general UI/label font.
+/// Roboto, matching the Android reference screenshots (Roboto is
+/// Android's system typeface, so this is the literal match rather than a
+/// substitution). RobotoMono is used only for code blocks and raw
+/// meteorological codes.
 ///
-/// Sora and Inter ship as OFL-licensed variable fonts (one file spans a
-/// weight axis) — [FontVariation] selects the weight instance;
-/// [FontWeight] alone only distinguishes a font's registered STATIC
-/// weights and would not pick the right instance out of a single
-/// variable-font file.
+/// Sizes marked "approx" were estimated from the reference screenshots
+/// rather than measured exactly, and should be tuned against the golden
+/// images if they read wrong.
 class AppTypography {
   AppTypography._();
 
-  static const _sora = 'Sora';
-  static const _inter = 'Inter';
-  static const _mono = 'IBMPlexMono';
+  static const sans = 'Roboto';
+  static const mono = 'RobotoMono';
 
-  static TextStyle display(Color color) => TextStyle(
-        fontFamily: _sora,
-        fontVariations: const [FontVariation('wght', 600)],
-        fontSize: 40,
-        height: 44 / 40,
+  static TextStyle _sans(double size, FontWeight weight, Color color,
+          {double? height}) =>
+      TextStyle(
+        fontFamily: sans,
+        fontSize: size,
+        fontWeight: weight,
         color: color,
+        height: height,
       );
 
-  static TextStyle headline(Color color) => TextStyle(
-        fontFamily: _sora,
-        fontVariations: const [FontVariation('wght', 600)],
-        fontSize: 24,
-        height: 30 / 24,
-        color: color,
-      );
+  /// Home hero temperature. Very large; approx.
+  static TextStyle hero(Color color) =>
+      _sans(112, FontWeight.w300, color, height: 1.0);
 
-  static TextStyle title(Color color) => TextStyle(
-        fontFamily: _sora,
-        fontVariations: const [FontVariation('wght', 500)],
-        fontSize: 18,
-        height: 24 / 18,
-        color: color,
-      );
+  /// Sidebar wordmark ("WeatherGPT"). Approx.
+  static TextStyle wordmark(Color color) => _sans(28, FontWeight.w700, color);
 
-  static TextStyle bodyLarge(Color color) => TextStyle(
-        fontFamily: _inter,
-        fontVariations: const [FontVariation('wght', 400)],
-        fontSize: 16,
-        height: 24 / 16,
-        color: color,
-      );
+  /// Screen titles, Home condition line. Approx.
+  static TextStyle title(Color color) => _sans(20, FontWeight.w400, color);
 
-  static TextStyle body(Color color) => TextStyle(
-        fontFamily: _inter,
-        fontVariations: const [FontVariation('wght', 400)],
-        fontSize: 14,
-        height: 20 / 14,
-        color: color,
-      );
+  /// Chat message body, menu rows, composer text.
+  static TextStyle body(Color color) =>
+      _sans(16, FontWeight.w400, color, height: 1.45);
 
-  static TextStyle caption(Color color) => TextStyle(
-        fontFamily: _inter,
-        fontVariations: const [FontVariation('wght', 500)],
-        fontSize: 12,
-        height: 16 / 12,
-        color: color,
-      );
+  /// Emphasised body (bold runs inside assistant messages).
+  static TextStyle bodyBold(Color color) =>
+      _sans(16, FontWeight.w700, color, height: 1.45);
 
+  /// Section headers ("Pinned", "Recents"), timestamps, captions.
+  static TextStyle label(Color color) => _sans(14, FontWeight.w400, color);
+
+  /// Small supporting text under forecast rows.
+  static TextStyle caption(Color color) => _sans(12, FontWeight.w400, color);
+
+  /// Code blocks and raw meteorological codes.
   static TextStyle code(Color color) => TextStyle(
-        fontFamily: _mono,
-        fontWeight: FontWeight.w400,
+        fontFamily: mono,
         fontSize: 13,
-        height: 18 / 13,
+        fontWeight: FontWeight.w400,
+        height: 1.45,
         color: color,
       );
 }

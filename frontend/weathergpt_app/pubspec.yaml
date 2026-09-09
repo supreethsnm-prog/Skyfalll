@@ -59,16 +59,12 @@ flutter:
   uses-material-design: true
 
   fonts:
-    - family: Sora
+    - family: Roboto
       fonts:
-        - asset: assets/fonts/Sora-Variable.ttf
-    - family: Inter
+        - asset: assets/fonts/Roboto-Variable.ttf
+    - family: RobotoMono
       fonts:
-        - asset: assets/fonts/Inter-Variable.ttf
-    - family: IBMPlexMono
-      fonts:
-        - asset: assets/fonts/IBMPlexMono-Regular.ttf
-          weight: 400
+        - asset: assets/fonts/RobotoMono-Variable.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

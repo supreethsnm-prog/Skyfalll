@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../features/chat/chat_screen.dart';
-import '../../features/gallery/gallery_screen.dart';
 import '../../features/shell/placeholder_screen.dart';
 
 final appRouter = GoRouter(
@@ -37,7 +35,7 @@ final appRouter = GoRouter(
           routes: [
             GoRoute(
               path: '/chat',
-              builder: (context, state) => const ChatScreen(),
+              builder: (context, state) => const PlaceholderScreen(title: 'Chat'),
             ),
           ],
         ),
@@ -61,7 +59,7 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/gallery',
-      builder: (context, state) => const GalleryScreen(),
+      builder: (context, state) => const PlaceholderScreen(title: 'Gallery'),
     ),
   ],
 );

@@ -1,37 +1,51 @@
 import 'package:flutter/material.dart';
 
-/// WeatherGPT's "Monsoon Sky" palette — see
-/// docs/superpowers/specs/2026-09-08-flutter-frontend-design.md for the
-/// rationale behind each color.
+/// Colours sampled directly from the reference screenshots in
+/// backend/FrontendReference/ — see
+/// docs/superpowers/specs/2026-09-09-flutter-design-literal.md §2.
+/// These are measured values, not design choices; do not "improve" them.
 class AppColors {
   AppColors._();
 
-  // Core palette
-  static const monsoonInk = Color(0xFF171B2E);
-  static const stormSlate = Color(0xFF2B3358);
-  static const cloudlight = Color(0xFFF5F6F4);
-  static const marigold = Color(0xFFE8A33D);
-  static const paddyGreen = Color(0xFF3F8F6B);
-  static const alertCrimson = Color(0xFFC23B4B);
+  /// Page and sidebar background. True black, as sampled.
+  static const bgBase = Color(0xFF000000);
 
-  // Text hierarchy
-  static const lightTextPrimary = Color(0xFF1B2340);
-  static const lightTextSecondary = Color(0xFF5B6178);
-  static const darkTextPrimary = Color(0xFFEDEEF2);
-  static const darkTextSecondary = Color(0xFF9DA3C2);
+  /// The single raised-chrome colour: round icon buttons, the composer
+  /// pill, dropdown menus, the attach menu. One colour for all of them.
+  static const surfaceRaised = Color(0xFF212121);
 
-  // Alert severity scale, keyed to the CAP protocol levels the backend's
-  // SACHET-sourced alerts already use (Minor/Moderate/Severe/Extreme).
+  /// Inset surfaces that sit *below* the base — code blocks.
+  static const surfaceInset = Color(0xFF131313);
+
+  /// Small icon wells inside menus.
+  static const surfaceIconWell = Color(0xFF454545);
+
+  /// Hairlines and blockquote rules.
+  static const divider = Color(0xFF434343);
+
+  static const textPrimary = Color(0xFFFFFFFF);
+  static const textSecondary = Color(0xFF9E9E9E);
+
+  /// Accent: send/voice button, the sidebar "Chat" pill, links.
+  static const accent = Color(0xFF3A83F6);
+
+  /// User message bubble fill.
+  static const userBubble = Color(0xFF133362);
+
+  /// Account avatar circle.
+  static const avatarFill = Color(0xFF7E8C8D);
+
+  /// Destructive actions ("Delete"). Inferred rather than sampled — only
+  /// anti-aliased edge pixels were recoverable from the reference.
+  static const destructive = Color(0xFFEF4444);
+
+  // Alert severity scale, carried over unchanged — keyed to the CAP
+  // levels the backend's SACHET-sourced alerts use.
   static const _severityMinor = Color(0xFFF3D9AE);
   static const _severityModerate = Color(0xFFD98E2B);
-  static const _severitySevere = alertCrimson;
+  static const _severitySevere = Color(0xFFC23B4B);
   static const _severityExtreme = Color(0xFF8F2836);
 
-  /// Maps a CAP severity string (as returned by the backend's alert
-  /// endpoints) to its display color. An unrecognized value — a typo, a
-  /// new level a future feed change introduces — falls back to
-  /// [_severityModerate] rather than throwing; a malformed severity
-  /// string must never crash the alerts screen.
   static Color alertSeverity(String? capSeverity) {
     switch (capSeverity?.toLowerCase()) {
       case 'minor':
@@ -47,31 +61,20 @@ class AppColors {
     }
   }
 
-  /// Returns a readable label color for text drawn on top of
-  /// [alertSeverity]'s background for the same [capSeverity]. Computed
-  /// from the background color's actual luminance
-  /// ([Color.computeLuminance]) rather than a hardcoded per-name guess,
-  /// so it stays correct if the severity hex values ever change.
-  ///
-  /// Picks whichever of [monsoonInk] / [cloudlight] yields the higher
-  /// WCAG contrast ratio against the background — not a flat "luminance
-  /// > 0.5" split, which (checked against these actual hex values) would
-  /// wrongly hand Moderate's mid-luminance orange a near-white label
-  /// even though Monsoon Ink contrasts against it far better.
+  /// Readable label colour for a severity chip, chosen by contrast ratio
+  /// against that severity's own background.
   static Color onAlertSeverity(String? capSeverity) {
     final background = alertSeverity(capSeverity);
-    final contrastWithInk = _contrastRatio(background, monsoonInk);
-    final contrastWithCloud = _contrastRatio(background, cloudlight);
-    return contrastWithInk >= contrastWithCloud ? monsoonInk : cloudlight;
+    final onDark = _contrastRatio(background, textPrimary);
+    final onLight = _contrastRatio(background, bgBase);
+    return onDark >= onLight ? textPrimary : bgBase;
   }
 
-  /// WCAG relative-luminance contrast ratio between two colors, in
-  /// [1, 21] — see https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio.
   static double _contrastRatio(Color a, Color b) {
-    final lumA = a.computeLuminance();
-    final lumB = b.computeLuminance();
-    final brighter = lumA > lumB ? lumA : lumB;
-    final darker = lumA > lumB ? lumB : lumA;
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final brighter = la > lb ? la : lb;
+    final darker = la > lb ? lb : la;
     return (brighter + 0.05) / (darker + 0.05);
   }
 }

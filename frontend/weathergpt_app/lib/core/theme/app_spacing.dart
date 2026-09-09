@@ -1,5 +1,6 @@
-/// 4px-base spacing scale. See
-/// docs/superpowers/specs/2026-09-08-flutter-frontend-design.md.
+/// 4dp grid. `screenMargin` is measured from the references (12dp side
+/// margin for the floating chrome buttons); the rest is a conventional
+/// scale built on the same grid.
 class AppSpacing {
   AppSpacing._();
 
@@ -7,8 +8,11 @@ class AppSpacing {
   static const double sm = 8;
   static const double md = 12;
   static const double lg = 16;
-  static const double xl = 24;
-  static const double xxl = 32;
-  static const double xxxl = 48;
-  static const double huge = 64;
+  static const double xl = 20;
+  static const double xxl = 24;
+  static const double xxxl = 32;
+  static const double huge = 48;
+
+  /// Horizontal margin from the screen edge to floating chrome.
+  static const double screenMargin = 12;
 }

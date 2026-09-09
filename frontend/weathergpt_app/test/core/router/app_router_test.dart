@@ -19,17 +19,13 @@ void main() {
     expect(find.byType(NavigationBar), findsOneWidget);
   });
 
-  testWidgets('navigating to /gallery shows the component gallery', (tester) async {
+  testWidgets('navigating to /gallery shows the placeholder', (tester) async {
     await tester.pumpWidget(MaterialApp.router(routerConfig: appRouter));
     await tester.pumpAndSettle();
 
     appRouter.go('/gallery');
-    // Not pumpAndSettle(): GalleryScreen's States section renders a
-    // LoadingView, whose CircularProgressIndicator animates indefinitely
-    // and would make pumpAndSettle time out waiting for animations to
-    // finish. A single pump is enough to build the new route.
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.text('Component gallery'), findsOneWidget);
+    expect(find.text('Gallery — coming soon'), findsOneWidget);
   });
 }
