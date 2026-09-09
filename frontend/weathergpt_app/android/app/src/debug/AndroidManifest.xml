@@ -4,4 +4,15 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Android 9 (API 28) and later block cleartext HTTP by default, so a
+         debug build on a real device cannot reach the dev backend over
+         http://<lan-ip>:8000 without this. Symptom without it is a
+         connection error on Home that looks like the server is down.
+
+         DEBUG ONLY, on purpose: this file does not apply to release
+         builds, so shipping traffic stays HTTPS-only. Do not copy this
+         attribute into src/main or src/profile.
+    -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>
