@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
+import 'package:weathergpt_app/data/alerts_socket.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
 
@@ -105,6 +108,19 @@ class FakeGeocodingApi implements GeocodingApi {
       super.noSuchMethod(invocation);
 }
 
+/// A socket that never emits, so tests do not open a real connection.
+/// `HomeScreen` subscribes on its first frame, and without this every
+/// widget test would try to reach ws://127.0.0.1:8000.
+class FakeAlertsSocket implements AlertsSocket {
+  final controller = StreamController<List<AlertSummary>>.broadcast();
+
+  @override
+  Stream<List<AlertSummary>> get newAlerts => controller.stream;
+
+  @override
+  void dispose() => controller.close();
+}
+
 /// Drop-in overrides for any `ProviderScope` mounting `HomeScreen`.
 ///
 /// The return type is inferred rather than written out: Riverpod 3 does
@@ -116,4 +132,5 @@ final fakeApiOverrides = [
   airQualityApiProvider.overrideWithValue(FakeAirQualityApi()),
   deviceLocationProvider.overrideWithValue(const FakeDeviceLocation()),
   geocodingApiProvider.overrideWithValue(const FakeGeocodingApi()),
+  alertsSocketProvider.overrideWithValue(FakeAlertsSocket()),
 ];

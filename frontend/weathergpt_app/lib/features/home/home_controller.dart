@@ -4,13 +4,15 @@ import '../../core/network/api_client.dart';
 import '../../core/network/app_error.dart';
 import '../../core/location/device_location.dart';
 import '../../data/air_quality_api.dart';
+import '../../data/alerts_socket.dart';
 import '../../data/alerts_api.dart';
 import '../../data/geocoding_api.dart';
 import '../../data/weather_api.dart';
 
-/// New Delhi — the fixed default starting location for this phase.
-/// No GPS/device-location integration exists yet (deliberate scope
-/// cut, see spec §6c); the user switches location via search.
+/// New Delhi — the FALLBACK location, used when the device's own
+/// position is unavailable (permission declined, location services off,
+/// no fix). Home opens on the device location when it can; see
+/// [HomeController.useCurrentLocation].
 const _defaultLocation = GeocodeResult(
   displayName: 'New Delhi, India',
   latitude: 28.6139,
@@ -67,6 +69,15 @@ final geocodingApiProvider = Provider<GeocodingApi>((ref) => GeocodingApi(buildA
 final airQualityApiProvider =
     Provider<AirQualityApi>((ref) => AirQualityApi(buildApiClient()));
 
+/// Live alert push. Kept alive for the app's lifetime rather than per
+/// screen, so the connection survives navigation, and disposed with the
+/// container so tests and hot restarts do not leak sockets.
+final alertsSocketProvider = Provider<AlertsSocket>((ref) {
+  final socket = WebSocketAlertsSocket();
+  ref.onDispose(socket.dispose);
+  return socket;
+});
+
 final deviceLocationProvider =
     Provider<DeviceLocation>((ref) => const GeolocatorDeviceLocation());
 
@@ -99,6 +110,46 @@ class HomeController extends Notifier<HomeUiState> {
   }
 
   Future<void> retry() => _load(_location);
+
+  /// Merges alerts pushed over the socket into the current screen.
+  ///
+  /// Applies the SAME radius filter as a fetched load — a warning for
+  /// Kerala must not appear on a Delhi screen just because it arrived
+  /// live. Returns the alerts that were actually near enough to add, so
+  /// the UI can announce exactly what it showed and stay silent when a
+  /// batch was all far away.
+  List<AlertSummary> mergeLiveAlerts(List<AlertSummary> incoming) {
+    final current = state;
+    if (current is! HomeLoaded) return const [];
+
+    final existingIds = current.nearbyAlerts.map((a) => a.id).toSet();
+
+    final relevant = incoming.where((alert) {
+      if (existingIds.contains(alert.id)) return false;
+      if (alert.latitude == null || alert.longitude == null) return false;
+      final distance = haversineKm(
+        current.location.latitude,
+        current.location.longitude,
+        alert.latitude!,
+        alert.longitude!,
+      );
+      return distance <= _alertRadiusKm;
+    }).toList();
+
+    if (relevant.isEmpty) return const [];
+
+    state = HomeLoaded(
+      location: current.location,
+      weather: current.weather,
+      forecast: current.forecast,
+      // Newest first: a warning that just arrived is the one to read.
+      nearbyAlerts: [...relevant, ...current.nearbyAlerts],
+      airQuality: current.airQuality,
+      locationFailure: current.locationFailure,
+    );
+
+    return relevant;
+  }
 
   /// Resolves the device's position and loads weather for it, falling
   /// back to the default city when there is no fix.

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:weathergpt_app/core/theme/app_theme.dart';
 import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
+import 'package:weathergpt_app/data/alerts_socket.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
@@ -169,6 +171,14 @@ class _FixedGeocoding implements GeocodingApi {
       super.noSuchMethod(invocation);
 }
 
+class _SilentSocket implements AlertsSocket {
+  @override
+  Stream<List<AlertSummary>> get newAlerts => const Stream.empty();
+
+  @override
+  void dispose() {}
+}
+
 class _FixedLocation implements DeviceLocation {
   @override
   Future<LocationResult> current() async =>
@@ -216,6 +226,7 @@ Future<void> _pumpHome(
         // hero always renders the same place name.
         deviceLocationProvider.overrideWithValue(_FixedLocation()),
         geocodingApiProvider.overrideWithValue(_FixedGeocoding()),
+        alertsSocketProvider.overrideWithValue(_SilentSocket()),
       ],
       child: MaterialApp(
         theme: AppTheme.dark,

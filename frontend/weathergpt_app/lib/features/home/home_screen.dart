@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/sky_gradient.dart';
+import '../../data/alerts_api.dart';
 import '../../data/weather_api.dart';
 import '../../shared/error_message.dart';
 import '../shell/app_drawer.dart';
@@ -40,6 +43,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  StreamSubscription<List<AlertSummary>>? _alertSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -47,7 +52,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // never lands during a build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(homeControllerProvider.notifier).loadInitial();
+      _listenForLiveAlerts();
     });
+  }
+
+  /// Surfaces warnings the moment the backend ingests them, rather than
+  /// waiting for the user to pull to refresh. For a disaster-advisory
+  /// app, waiting to be asked is the wrong way round.
+  void _listenForLiveAlerts() {
+    _alertSubscription =
+        ref.read(alertsSocketProvider).newAlerts.listen((alerts) {
+      // The controller applies the same radius filter a fetched load
+      // does, and tells us what actually landed — so a batch of distant
+      // warnings interrupts nobody.
+      final nearby =
+          ref.read(homeControllerProvider.notifier).mergeLiveAlerts(alerts);
+      if (nearby.isEmpty || !mounted) return;
+
+      final first = nearby.first;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.alertSeverity(first.severity),
+          duration: const Duration(seconds: 8),
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            nearby.length == 1
+                ? '${first.severity}: ${first.eventType}'
+                : '${nearby.length} new alerts for this area',
+            style: AppTypography.body(
+              AppColors.onAlertSeverity(first.severity),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _alertSubscription?.cancel();
+    super.dispose();
   }
 
   @override
