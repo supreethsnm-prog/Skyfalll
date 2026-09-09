@@ -76,7 +76,7 @@ spec §4 and `backend/app/main.py`.
    Forecast / Alerts.
 2. **Chat** — `POST /chat`. `POST /voice/chat` + `GET /voice/languages`
    wired end-to-end but feature-flagged off in the UI (see §9) until
-   BHASHINI's credential issue is resolved externally.
+   BHASHINI's credential issue is resolved externally. Full design in §6a.
 3. **Forecast** — `GET /forecast` (Open-Meteo daily) as the primary view,
    with a collapsible "Model outlook (GFS)" section backed by `GET /nwp`
    — same screen, since both answer "what's coming," not two screens.
@@ -90,6 +90,66 @@ spec §4 and `backend/app/main.py`.
    - **Marine** (`GET /marine/pfz-zones`), **Aviation** (`GET /metar` by
      ICAO code), **Agriculture** (`GET /advisory/agriculture`), **Urban**
      (`GET /advisory/urban`) as cards in a shared Advisories view.
+
+## 6a. Chat screen design
+
+The centerpiece of this app (the user restated the goal mid-build as
+"pretty much a ChatGPT app clone" — chat is the primary surface, not one
+tab among four). Design, grounded in what `POST /chat` actually returns
+(`{"reply": string, "history": [{"role", "content", ...}]}` per
+`backend/app/chat/service.py`):
+
+- **Message list**: reversed `ListView` (newest at bottom, auto-scrolls
+  on new message). User messages are right-aligned with a light
+  Marigold-tinted rounded surface (`AppRadius.surface`); assistant
+  messages are left-aligned as flat text on the background — no bubble —
+  per the "subtle elevation, not card-heavy" principle. Only the user's
+  turn gets a visible container; the assistant's response reads as
+  direct prose, the way ChatGPT's own assistant turns do.
+- **Composer**: bottom-anchored, multiline auto-growing text field, a
+  mic-icon affordance (present but disabled per §9's voice feature flag
+  — greyed out, not hidden, so the seam is visible), and a send button
+  using `AppPrimaryButton`'s icon-capable variant (added in Phase 0
+  specifically anticipating this).
+- **"Streaming" feel without real streaming**: `POST /chat` is a single
+  request/response, not a token stream (backend spec §1's grounding
+  principle — the LLM call happens once per turn — and this branch does
+  not modify the backend). The feel is approximated client-side: a
+  typing indicator (three animated dots, not a full-screen `LoadingView`)
+  while the request is in flight, then the reply text reveals over a
+  short duration (e.g. a fast word-by-word or char-by-char fade-in)
+  once it arrives, rather than snapping in instantly. This is a UI
+  animation choice, not a backend capability — labelled as such in code
+  comments so it's never mistaken for real streaming later.
+- **History**: kept in memory for the session as the same
+  `role`/`content` list shape the backend's `history` field already
+  uses — round-tripped back to `POST /chat` verbatim each turn (this is
+  exactly what the backend contract expects; no translation layer
+  needed). No local persistence in this phase (YAGNI — add if a later
+  phase needs conversations to survive an app restart).
+- **Empty state**: first load shows a short welcome + 3-4 suggested
+  question chips (`AppChip`, e.g. "Any alerts near me?", "Will it rain
+  in Pune tomorrow?") — tapping one fills and sends the composer. A
+  ChatGPT-familiar affordance that also doubles as a demo aid for
+  judges who don't know what to ask.
+- **Errors**: a failed request shows an inline `ErrorView` in place of
+  the pending assistant turn, with Retry re-sending the same user
+  message — never a full-screen error that loses the conversation.
+
+## 6b. Environment note: no Android emulator on this hardware
+
+Recorded here because it affects every future phase's verification
+step, not just Phase 0's: this machine's GPU (Intel UHD Graphics)
+reports Vulkan 1.3.235 while the Android emulator requires >= 1.3.240,
+so it falls back to software rendering and does not boot in practice
+(confirmed: two attempts, one hung for 40+ minutes with a frozen CPU
+counter). Visual verification for every phase runs against golden-image
+tests (real fonts loaded via `FontLoader`, rendered offline, reviewed as
+PNGs) rather than a live emulator screenshot. A real Android device,
+when available, remains the way to catch device-specific issues this
+approach can't (system font fallback, real touch ripple, status-bar
+insets) — not required for a phase to ship, but worth doing once before
+the actual hackathon demo.
 
 ## 7. Design system
 
@@ -135,9 +195,11 @@ project has shipped:
 - **Phase 0** — scaffold + core infra: networking (`dio` client + env
   config), theming shell, router, shared widgets/design tokens. No
   user-facing screens beyond a component gallery for visual sanity-check
-  of the tokens.
-- **Phase 1** — Home screen, visually iterated (see §12).
-- **Phase 2** — Chat.
+  of the tokens. **Shipped** — merged to main, 30 tests passing.
+- **Phase 1** — Chat (see §6a). Reordered ahead of Home per a live
+  mid-build instruction restating the goal as a ChatGPT-style app —
+  chat is the product's center, not one tab among four.
+- **Phase 2** — Home screen, visually iterated (see §12).
 - **Phase 3** — Forecast, Alerts (+ live WS), Historical, Advisories.
 
 Standing instruction for this rollout only (explicitly approved): at each
@@ -147,14 +209,16 @@ every backend sprint this session was resolved.
 
 ## 12. Visual iteration without a human in the loop
 
-The brief's iteration loop ("build Home, run it, visually inspect,
+The brief's iteration loop ("build a screen, run it, visually inspect,
 iterate, then move on") assumes a human looking at each build. For the
-unattended stretch, self-review replaces that: run the build (Chrome via
-`claude-in-chrome`, or the Android emulator via screencap), take a
-screenshot, and critique it against the design tokens and the brief's
-design principles before calling a screen "polished." When the user is
-present and watching, `flutter run -d chrome`/an emulator window updates
-live on save — no extra tooling needed for that case.
+unattended stretch, self-review replaces that: per §6b, the Android
+emulator does not boot on this hardware, so verification runs as an
+offline golden-image test (real bundled fonts loaded via `FontLoader`,
+rendered to a PNG at a phone-shaped logical size, reviewed by eye)
+rather than a live emulator or device screenshot. When the user is
+present and watching, `flutter run -d chrome`/`-d windows` still updates
+live on save for a fast dev loop — no extra tooling needed for that case,
+it just isn't the verification step a phase's completion depends on.
 
 ## 13. Explicitly out of scope for this spec
 
