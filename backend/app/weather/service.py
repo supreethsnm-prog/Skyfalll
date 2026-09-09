@@ -149,6 +149,10 @@ def get_weather(
             timezone=reading.timezone,
             raw_payload=reading.raw_payload,
             fetched_at=fetched_at,
+            apparent_temperature_c=reading.apparent_temperature_c,
+            pressure_hpa=reading.pressure_hpa,
+            dew_point_c=reading.dew_point_c,
+            hourly=reading.hourly,
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=[WeatherReading.latitude, WeatherReading.longitude],

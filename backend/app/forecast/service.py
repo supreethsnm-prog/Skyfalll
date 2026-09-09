@@ -134,6 +134,9 @@ def get_forecast(
                 wind_speed_max_kmh=day.wind_speed_max_kmh,
                 raw_payload=day.raw_payload,
                 fetched_at=fetched_at,
+                uv_index_max=day.uv_index_max,
+                sunrise=day.sunrise,
+                sunset=day.sunset,
             )
             stmt = stmt.on_conflict_do_update(
                 index_elements=[
