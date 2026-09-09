@@ -32,6 +32,9 @@ _RESPONSE_FIELDS = (
     "precip_sum_mm",
     "wind_speed_max_kmh",
     "fetched_at",
+    "uv_index_max",
+    "sunrise",
+    "sunset",
 )
 
 _MUTABLE_COLUMNS = (
@@ -43,6 +46,9 @@ _MUTABLE_COLUMNS = (
     "wind_speed_max_kmh",
     "raw_payload",
     "fetched_at",
+    "uv_index_max",
+    "sunrise",
+    "sunset",
 )
 
 

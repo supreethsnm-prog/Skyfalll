@@ -43,6 +43,18 @@ class WeatherReading(Base):
     raw_payload = Column(JSONB, nullable=False)
     fetched_at = Column(DateTime(timezone=True), nullable=False)
 
+    # Nullable: Open-Meteo omits these for some points, and rows cached
+    # before they were requested predate them entirely.
+    apparent_temperature_c = Column(Float, nullable=True)
+    pressure_hpa = Column(Float, nullable=True)
+    dew_point_c = Column(Float, nullable=True)
+
+    # Hourly series for the Home strip: a JSON array of
+    # {time, temperature_c, weather_code}. It lives on this row rather than
+    # in its own table because it comes from the same upstream call and
+    # expires with the same TTL.
+    hourly = Column(JSONB, nullable=True)
+
 
 class GeocodeCache(Base):
     __tablename__ = "geocode_cache"
@@ -116,6 +128,12 @@ class WeatherForecast(Base):
     wind_speed_max_kmh = Column(Float, nullable=False)
     raw_payload = Column(JSONB, nullable=False)
     fetched_at = Column(DateTime(timezone=True), nullable=False)
+
+    # Nullable, as on WeatherReading. Sun times are stored as the upstream
+    # ISO strings, matching forecast_date's existing treatment.
+    uv_index_max = Column(Float, nullable=True)
+    sunrise = Column(String, nullable=True)
+    sunset = Column(String, nullable=True)
 
 
 class GfsForecastPoint(Base):

@@ -40,6 +40,10 @@ _RESPONSE_FIELDS = (
     "observed_at",
     "timezone",
     "fetched_at",
+    "apparent_temperature_c",
+    "pressure_hpa",
+    "dew_point_c",
+    "hourly",
 )
 
 _MUTABLE_COLUMNS = (
@@ -52,11 +56,42 @@ _MUTABLE_COLUMNS = (
     "timezone",
     "raw_payload",
     "fetched_at",
+    "apparent_temperature_c",
+    "pressure_hpa",
+    "dew_point_c",
+    "hourly",
 )
 
 
+_HOURLY_WINDOW = 24
+
+
+def _trim_hourly(hourly, observed_at: str):
+    """The next [_HOURLY_WINDOW] hours at or after `observed_at`.
+
+    The provider stores two full days so a request landing late in the day
+    still has 24 hours ahead of it; callers want a forward-looking window,
+    not this morning. Trimming happens here rather than in the provider
+    because the provider's job is to report what upstream said, and the
+    cached row keeps the full series for any other consumer.
+
+    String comparison is deliberate and safe: both values are Open-Meteo
+    ISO-8601 local timestamps of identical width from the same response,
+    so lexicographic order equals chronological order without parsing.
+    """
+    if not hourly:
+        return hourly
+
+    upcoming = [entry for entry in hourly if entry.get("time", "") >= observed_at]
+    # A series entirely in the past means the cached row is stale in a way
+    # the TTL did not catch; showing its tail beats showing nothing.
+    return (upcoming or hourly)[:_HOURLY_WINDOW]
+
+
 def _to_response(row) -> dict:
-    return {field: row[field] for field in _RESPONSE_FIELDS}
+    response = {field: row[field] for field in _RESPONSE_FIELDS}
+    response["hourly"] = _trim_hourly(response["hourly"], response["observed_at"])
+    return response
 
 
 def get_weather(

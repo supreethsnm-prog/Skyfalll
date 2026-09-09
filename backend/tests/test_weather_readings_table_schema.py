@@ -20,6 +20,11 @@ def test_weather_readings_table_exists_with_expected_columns():
         "timezone",
         "raw_payload",
         "fetched_at",
+        # Rich fields, all nullable — see app/models.py.
+        "apparent_temperature_c",
+        "pressure_hpa",
+        "dew_point_c",
+        "hourly",
     }
 
 
