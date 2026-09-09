@@ -22,6 +22,8 @@ import 'widgets/detail_tiles.dart';
 import 'widgets/forecast_panel.dart';
 import 'widgets/home_hero.dart';
 import 'widgets/location_search_sheet.dart';
+import '../saved/saved_places_controller.dart';
+import '../../data/geocoding_api.dart';
 
 /// The app's launch screen, modelled on the Google Weather home screen
 /// (`Home1.jpeg`, `Home2.jpeg`): a full-bleed sky reflecting the current
@@ -126,7 +128,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 top: 0,
                 left: 0,
                 right: 0,
-                child: _Chrome(foreground: foreground),
+                child: _Chrome(
+                  foreground: foreground,
+                  place: state is HomeLoaded ? state.location : null,
+                ),
               ),
             ],
           ),
@@ -136,13 +141,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _Chrome extends StatelessWidget {
-  const _Chrome({required this.foreground});
+class _Chrome extends ConsumerWidget {
+  const _Chrome({required this.foreground, this.place});
 
   final Color foreground;
 
+  /// The location currently shown, so it can be saved. Null while
+  /// loading or errored, when there is nothing to bookmark.
+  final GeocodeResult? place;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final current = place;
+    final isSaved =
+        current != null && ref.watch(savedPlacesProvider.notifier).isSaved(current);
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.screenMargin),
       child: Row(
@@ -155,6 +167,29 @@ class _Chrome extends StatelessWidget {
           ),
           Row(
             children: [
+              if (current != null) ...[
+                RoundIconButton(
+                  icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
+                  tooltip: isSaved ? 'Remove from saved' : 'Save this place',
+                  onPressed: () {
+                    ref.read(savedPlacesProvider.notifier).toggle(current);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        behavior: SnackBarBehavior.floating,
+                        backgroundColor: AppColors.surfaceRaised,
+                        duration: const Duration(seconds: 2),
+                        content: Text(
+                          isSaved
+                              ? 'Removed ${current.displayName}'
+                              : 'Saved ${current.displayName}',
+                          style: AppTypography.body(AppColors.textPrimary),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
               RoundIconButton(
                 icon: Icons.search,
                 tooltip: 'Search location',
@@ -186,6 +221,11 @@ class _Chrome extends StatelessWidget {
                         icon: Icons.place_outlined,
                         label: 'Change location',
                         onTap: () => showLocationSearch(context),
+                      ),
+                      AppMenuItem(
+                        icon: Icons.bookmark_border,
+                        label: 'Saved places',
+                        onTap: () => context.go('/saved'),
                       ),
                       AppMenuItem(
                         icon: Icons.settings_outlined,

@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
-import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
 
@@ -10,14 +9,6 @@ import 'package:weathergpt_app/features/home/home_controller.dart';
 /// fetched ones. A live warning for Kerala appearing on a Delhi screen
 /// would be worse than no live alerts at all — on a disaster app, a
 /// warning that does not apply to you teaches you to ignore warnings.
-
-const _delhi = GeocodeResult(
-  displayName: 'New Delhi, India',
-  latitude: 28.6139,
-  longitude: 77.2090,
-  country: 'India',
-  state: 'Delhi',
-);
 
 AlertSummary _alert({
   required int id,

@@ -82,9 +82,13 @@ class AppDrawer extends StatelessWidget {
                     onTap: () {},
                   ),
                   _NavEntry(
-                    icon: Icons.place_outlined,
+                    icon: Icons.bookmark_border,
                     label: 'Saved places',
-                    onTap: () {},
+                    selected: activeRoute == '/saved',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      context.go('/saved');
+                    },
                   ),
                   const _SectionLabel('Recents'),
                   if (recents.isEmpty)

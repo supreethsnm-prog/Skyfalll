@@ -7,6 +7,7 @@ import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/alerts_socket.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
+import 'package:weathergpt_app/features/saved/saved_places_controller.dart';
 
 /// Offline stand-ins for the network layer.
 ///
@@ -121,6 +122,22 @@ class FakeAlertsSocket implements AlertsSocket {
   void dispose() => controller.close();
 }
 
+
+/// In-memory saved places, so tests do not need the shared_preferences
+/// plugin — which has no implementation in a widget test and throws
+/// MissingPluginException the moment Home's chrome reads the provider.
+class FakeSavedPlacesStore implements SavedPlacesStore {
+  FakeSavedPlacesStore([this.places = const []]);
+
+  List<GeocodeResult> places;
+
+  @override
+  Future<List<GeocodeResult>> load() async => places;
+
+  @override
+  Future<void> save(List<GeocodeResult> next) async => places = next;
+}
+
 /// Drop-in overrides for any `ProviderScope` mounting `HomeScreen`.
 ///
 /// The return type is inferred rather than written out: Riverpod 3 does
@@ -133,4 +150,5 @@ final fakeApiOverrides = [
   deviceLocationProvider.overrideWithValue(const FakeDeviceLocation()),
   geocodingApiProvider.overrideWithValue(const FakeGeocodingApi()),
   alertsSocketProvider.overrideWithValue(FakeAlertsSocket()),
+  savedPlacesStoreProvider.overrideWithValue(FakeSavedPlacesStore()),
 ];

@@ -14,6 +14,7 @@ import 'package:weathergpt_app/data/alerts_socket.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
+import 'package:weathergpt_app/features/saved/saved_places_controller.dart';
 import 'package:weathergpt_app/features/home/home_screen.dart';
 
 /// Registers a real bundled font so goldens use actual Roboto glyphs
@@ -171,6 +172,14 @@ class _FixedGeocoding implements GeocodingApi {
       super.noSuchMethod(invocation);
 }
 
+class _EmptySavedStore implements SavedPlacesStore {
+  @override
+  Future<List<GeocodeResult>> load() async => const [];
+
+  @override
+  Future<void> save(List<GeocodeResult> places) async {}
+}
+
 class _SilentSocket implements AlertsSocket {
   @override
   Stream<List<AlertSummary>> get newAlerts => const Stream.empty();
@@ -227,6 +236,7 @@ Future<void> _pumpHome(
         deviceLocationProvider.overrideWithValue(_FixedLocation()),
         geocodingApiProvider.overrideWithValue(_FixedGeocoding()),
         alertsSocketProvider.overrideWithValue(_SilentSocket()),
+        savedPlacesStoreProvider.overrideWithValue(_EmptySavedStore()),
       ],
       child: MaterialApp(
         theme: AppTheme.dark,

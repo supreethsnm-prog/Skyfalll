@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/chat/chat_screen.dart';
 import '../../features/gallery/gallery_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../features/saved/saved_places_screen.dart';
 
 /// A plain route stack — deliberately **no** bottom navigation bar.
 ///
@@ -24,6 +25,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/chat',
       builder: (context, state) => const ChatScreen(),
+    ),
+    GoRoute(
+      path: '/saved',
+      builder: (context, state) => const SavedPlacesScreen(),
     ),
     GoRoute(
       path: '/gallery',
