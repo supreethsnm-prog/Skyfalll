@@ -268,25 +268,46 @@ The references are stills, so motion is inferred and deliberately minimal:
 
 ---
 
-## 6. Open decisions requiring the user's call
+## 6. Decisions (resolved by the user)
 
-1. **Sidebar nav rows.** The reference's Images / Library / Projects /
-   Scheduled / Plugins are ChatGPT features WeatherGPT doesn't have. The
-   brief asks for Discover and News placeholders plus "something else if
-   you wanna add". Proposed WeatherGPT set: **Home (weather)**, **Discover**,
-   **News**, **Alerts**, **Saved places**.
-2. **Overflow menu per screen.** Reference rows are conversation-scoped
-   (Pin/Archive/Delete). On Home there is no conversation to act on.
-   Proposed: Home shows a reduced menu (Share, Settings, Units); an open
-   conversation shows the full reference set minus items with no backing
-   feature (no "Add to project", no "Uploaded files").
-3. **Home panels with no backing data** (AQI, UV, pressure, real-feel,
-   sunrise/sunset, hourly graph). Options: (a) build only what the API
-   supports — hero, 5-day forecast, wind, humidity — and drop the rest;
-   (b) build every panel and show "—" where unavailable; (c) build every
-   panel and compute what's derivable (sunrise/sunset is computable from
-   lat/lon + date with no API; an hourly curve is *not* derivable from
-   daily data).
-4. **Light mode.** Every reference is dark. The chat surface is true black;
-   Home is a light sky regardless. Proposed: ship dark-only for the chat
-   chrome in this phase and treat light mode as out of scope.
+1. **Sidebar nav rows** — **Home, Discover, News, Alerts, Saved places.**
+   Only Home navigates anywhere in this build; Discover, News, Alerts and
+   Saved places render as rows but are inert placeholders for future
+   features (explicitly requested as "pre-firing future features").
+2. **Overflow menu per screen** — context-dependent. On Home: a reduced
+   menu (Share → the weather-image share flow, plus Settings). In an open
+   conversation: the reference set minus rows with no backing feature —
+   so Share / Pin / Find in chat / Archive / Delete, and **not** "Add to
+   project" or "Uploaded files".
+3. **Home panels** — **build only what the backend can actually fill.**
+   Ship: hero temperature, condition + hi/lo, 5-day forecast panel, wind
+   panel (speed + compass direction), and a details panel limited to
+   humidity and wind. **Do not build** AQI, UV, pressure, real-feel,
+   sunrise/sunset, or the 24-hour graph — no data source exists for them
+   and no placeholder or invented values are to be shown. The Home screen
+   is therefore shorter than `Home1`/`Home2`, using the same visual
+   language for the panels it does have.
+4. **Light mode** — **dark-only for this build**, but the theme must be
+   structured so a light palette can be added later without rework
+   (tokens resolved through a theme object, never hardcoded per widget).
+
+### 6.1 Sky background system (user-directed refinement)
+
+The Home background is **not a fixed light sky**. As in the real app, it
+varies with **time of day** and **current conditions**. Build it as a
+gradient system selected by two inputs:
+
+- **Time of day**, derived from the device clock against the location's
+  `timezone` (returned by `/weather`): `dawn`, `day`, `dusk`, `night`.
+- **Condition bucket**, derived from the existing `weatherIconFor` WMO
+  mapping: `clear`, `cloudy`, `fog`, `rain`, `snow`, `thunderstorm`.
+
+Each combination resolves to a vertical multi-stop gradient. The sampled
+`Home1` values (`#C8D3E9` → `#7995C4` → `#93A8C7`) define the
+**day + cloudy** case; the others are designed to match its structure
+(light top, saturated middle, lighter base) shifted in hue and value —
+night variants are dark blues where white text still reads cleanly, which
+also keeps foreground contrast constant across every variant.
+
+Glass panels keep the same low-alpha-white + blur treatment against every
+sky, so panel styling never needs per-variant special-casing.
