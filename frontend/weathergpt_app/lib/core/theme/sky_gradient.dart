@@ -15,6 +15,24 @@ enum SkyTimeOfDay { dawn, day, dusk, night }
 /// other.
 enum SkyCondition { clear, cloudy, fog, rain, snow, thunderstorm }
 
+/// **Contrast floor (the "AA note" the gradient tables refer to).**
+///
+/// Home's temperature and forecast text sit directly on these gradients,
+/// so every stop of every gradient must clear WCAG AA (4.5:1) against
+/// whichever foreground [skyForeground] picks for it.
+///
+/// Seven gradients originally failed that: they were mid-tone, clearing
+/// 4.5:1 against *neither* black nor white, so no choice of foreground
+/// could fix them. They were darkened toward black with hue preserved
+/// (dawn/rain, day/rain, day/thunderstorm, and all of dusk except fog and
+/// thunderstorm, which already passed). That is also physically truthful —
+/// a rainy dawn and a deepening dusk really are dim.
+///
+/// `sky_gradient_test.dart` enforces the floor across all 24 combinations.
+/// If you add or retune a gradient, keep every stop's luminance at or
+/// below ~0.183 for white text, or light enough for black text; the test
+/// will tell you which side you have landed on.
+
 /// Buckets the local wall-clock time into a [SkyTimeOfDay].
 ///
 /// - dawn: 05:00-07:59
@@ -90,10 +108,11 @@ const Map<SkyTimeOfDay, Map<SkyCondition, List<Color>>> _skyGradients = {
       Color(0xFFB7A8A4),
       Color(0xFFCDBDB8),
     ],
+    // Darkened for contrast (see the AA note above): a rainy dawn is dim.
     SkyCondition.rain: [
-      Color(0xFFB9AFC0),
+      Color(0xFF756E79),
       Color(0xFF6E6580),
-      Color(0xFF8D84A0),
+      Color(0xFF756D85),
     ],
     SkyCondition.snow: [
       Color(0xFFDCE0E8),
@@ -123,30 +142,38 @@ const Map<SkyTimeOfDay, Map<SkyCondition, List<Color>>> _skyGradients = {
       Color(0xFF9AA3AC),
       Color(0xFFB7BEC4),
     ],
+    // Darkened for contrast (see the AA note above): an overcast, raining
+    // day sky is much dimmer than a clear one.
     SkyCondition.rain: [
-      Color(0xFFA9B2C4),
+      Color(0xFF6C717D),
       Color(0xFF5A6B8C),
-      Color(0xFF7C8CAA),
+      Color(0xFF65718A),
     ],
     SkyCondition.snow: [
       Color(0xFFD3E1EE),
       Color(0xFF8FAAC9),
       Color(0xFFAEC2D9),
     ],
+    // Darkened for contrast (see the AA note above).
     SkyCondition.thunderstorm: [
-      Color(0xFF7E88A0),
+      Color(0xFF687185),
       Color(0xFF3A4260),
       Color(0xFF5C6584),
     ],
   },
   SkyTimeOfDay.dusk: {
+    // Every dusk sky below is darkened for contrast (see the AA note
+    // above). Dusk is the worst case: mid-tone by nature, so it failed
+    // against both black and white text before this. Hue is preserved —
+    // these are the same sunset colours scaled toward black, which is
+    // also what a sky actually does as dusk deepens.
     SkyCondition.clear: [
-      Color(0xFFF6B87E),
-      Color(0xFFD8637A),
+      Color(0xFF8D6A48),
+      Color(0xFFB25265),
       Color(0xFF8F5C8C),
     ],
     SkyCondition.cloudy: [
-      Color(0xFFD9A6A0),
+      Color(0xFF8A6966),
       Color(0xFF8F5F76),
       Color(0xFF6E5A82),
     ],
@@ -156,13 +183,13 @@ const Map<SkyTimeOfDay, Map<SkyCondition, List<Color>>> _skyGradients = {
       Color(0xFF7C7488),
     ],
     SkyCondition.rain: [
-      Color(0xFF9E8BA0),
+      Color(0xFF7B6C7D),
       Color(0xFF5C4E70),
       Color(0xFF453A5C),
     ],
     SkyCondition.snow: [
-      Color(0xFFC7C3D6),
-      Color(0xFF8288AC),
+      Color(0xFF726F7A),
+      Color(0xFF6B6F8D),
       Color(0xFF625E82),
     ],
     SkyCondition.thunderstorm: [

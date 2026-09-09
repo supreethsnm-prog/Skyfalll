@@ -305,9 +305,12 @@ class _SkySection extends StatelessWidget {
     const combos = <(String, SkyTimeOfDay, SkyCondition)>[
       ('day + cloudy (the sampled reference)', SkyTimeOfDay.day,
           SkyCondition.cloudy),
-      ('night + clear', SkyTimeOfDay.night, SkyCondition.clear),
-      ('dusk + rain', SkyTimeOfDay.dusk, SkyCondition.rain),
       ('dawn + clear', SkyTimeOfDay.dawn, SkyCondition.clear),
+      ('dusk + clear (darkened for contrast)', SkyTimeOfDay.dusk,
+          SkyCondition.clear),
+      ('dusk + rain (darkened for contrast)', SkyTimeOfDay.dusk,
+          SkyCondition.rain),
+      ('night + clear', SkyTimeOfDay.night, SkyCondition.clear),
     ];
 
     return Column(

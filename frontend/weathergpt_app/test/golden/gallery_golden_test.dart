@@ -143,7 +143,7 @@ void main() {
   });
 
   testWidgets('gallery — sky gradients and glass panels', (tester) async {
-    await _pumpSection(tester, GallerySection.sky, logicalHeight: 1120);
+    await _pumpSection(tester, GallerySection.sky, logicalHeight: 1400);
 
     await expectLater(
       find.byType(GalleryScreen),
