@@ -218,7 +218,7 @@ class _AppMenuRow extends StatelessWidget {
     final color =
         item.destructive ? AppColors.destructive : AppColors.textPrimary;
 
-    Widget icon = Icon(item.icon, size: 20, color: color);
+    Widget icon = Icon(item.icon, size: AppRadius.iconSize, color: color);
 
     if (item.iconWell) {
       // The attach menu's wells are the same 40dp as every other round

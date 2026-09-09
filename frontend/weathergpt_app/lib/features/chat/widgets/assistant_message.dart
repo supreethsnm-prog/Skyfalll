@@ -137,7 +137,7 @@ class _ActionIcon extends StatelessWidget {
         child: IconButton(
           onPressed: onPressed,
           tooltip: label,
-          icon: Icon(icon, size: 20, color: AppColors.textSecondary),
+          icon: Icon(icon, size: AppRadius.iconSize, color: AppColors.textSecondary),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(
             minWidth: AppRadius.iconButton,

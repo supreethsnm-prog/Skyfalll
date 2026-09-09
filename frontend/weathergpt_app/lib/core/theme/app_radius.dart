@@ -39,4 +39,12 @@ class AppRadius {
   /// User bubbles never exceed this fraction of the screen width.
   /// Measured.
   static const double bubbleMaxWidthFactor = 0.72;
+
+  /// Glyph size for every small action/menu icon: the round chrome
+  /// affordances, assistant action-row icons, code-block copy icon, and
+  /// menu row icons. Previously hardcoded ad hoc at each site (20 in most
+  /// places, 18 in code_block.dart, with nothing justifying the
+  /// difference) — one token now, matching the reference's uniform icon
+  /// scale. Chosen — not individually measured per site.
+  static const double iconSize = 20;
 }

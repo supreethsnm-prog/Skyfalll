@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/theme/app_colors.dart';
+import 'package:weathergpt_app/core/theme/app_radius.dart';
 import 'package:weathergpt_app/features/chat/widgets/code_block.dart';
 
 void main() {
@@ -53,5 +54,20 @@ void main() {
     final size = tester.getSize(buttonFinder);
     expect(size.width, greaterThanOrEqualTo(40));
     expect(size.height, greaterThanOrEqualTo(40));
+  });
+
+  testWidgets('the copy icon glyph uses the shared AppRadius.iconSize, not '
+      'a one-off smaller literal', (tester) async {
+    // Previously hardcoded at 18 here vs 20 everywhere else this glyph
+    // scale is used (round chrome buttons, assistant action row, menu
+    // rows) — nothing justified the difference.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: CodeBlock(code: 'x', onCopy: () {})),
+      ),
+    );
+
+    final icon = tester.widget<Icon>(find.byIcon(Icons.copy_outlined));
+    expect(icon.size, AppRadius.iconSize);
   });
 }

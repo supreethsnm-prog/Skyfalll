@@ -43,7 +43,7 @@ class RoundIconButton extends StatelessWidget {
             child: Center(
               child: Icon(
                 icon,
-                size: 20,
+                size: AppRadius.iconSize,
                 color: enabled
                     ? AppColors.textPrimary
                     : AppColors.textPrimary.withValues(alpha: 0.38),

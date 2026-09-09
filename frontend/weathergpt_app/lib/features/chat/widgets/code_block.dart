@@ -44,8 +44,9 @@ class CodeBlock extends StatelessWidget {
             // populates the semantics `tooltip` field, not `label`, which
             // most screen readers announce far less prominently. The tap
             // target is held at the 40dp accessible minimum via
-            // `constraints`; the glyph itself stays the reference's
-            // smaller 18dp.
+            // `constraints`; the glyph uses the shared AppRadius.iconSize
+            // (previously 18dp here vs 20dp everywhere else — nothing
+            // justified the difference).
             Semantics(
               button: true,
               enabled: true,
@@ -55,7 +56,7 @@ class CodeBlock extends StatelessWidget {
                 child: IconButton(
                   onPressed: onCopy,
                   tooltip: 'Copy',
-                  icon: const Icon(Icons.copy_outlined, size: 18),
+                  icon: const Icon(Icons.copy_outlined, size: AppRadius.iconSize),
                   color: AppColors.textSecondary,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
