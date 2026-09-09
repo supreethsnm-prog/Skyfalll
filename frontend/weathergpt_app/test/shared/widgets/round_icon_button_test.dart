@@ -1,3 +1,5 @@
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/theme/app_colors.dart';
@@ -52,5 +54,40 @@ void main() {
     await tester.tap(find.byType(RoundIconButton));
     await tester.pump();
     // No callback to assert; the test proves tapping a disabled button is inert.
+  });
+
+  testWidgets('announces as an enabled button with the tooltip as its label',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RoundIconButton(
+            icon: Icons.menu,
+            onPressed: () {},
+            tooltip: 'Menu',
+          ),
+        ),
+      ),
+    );
+
+    final semantics = tester.getSemantics(find.byType(RoundIconButton));
+    expect(semantics.flagsCollection.isButton, isTrue);
+    expect(semantics.flagsCollection.isEnabled, Tristate.isTrue);
+    expect(semantics.label, 'Menu');
+  });
+
+  testWidgets('announces as a disabled button when onPressed is null',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: RoundIconButton(icon: Icons.mic_none, onPressed: null),
+        ),
+      ),
+    );
+
+    final semantics = tester.getSemantics(find.byType(RoundIconButton));
+    expect(semantics.flagsCollection.isButton, isTrue);
+    expect(semantics.flagsCollection.isEnabled, Tristate.isFalse);
   });
 }

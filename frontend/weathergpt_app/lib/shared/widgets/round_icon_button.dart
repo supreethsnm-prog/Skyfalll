@@ -58,6 +58,19 @@ class RoundIconButton extends StatelessWidget {
       button = Tooltip(message: tooltip!, child: button);
     }
 
-    return button;
+    // IconButton (which this widget replaces to hit the exact 40x40 circle)
+    // supplies button semantics automatically; Material+InkWell does not, so
+    // it must be added explicitly. This is the single uniform chrome
+    // affordance used on every screen, so a screen-reader gap here would
+    // propagate everywhere. ExcludeSemantics on the visual subtree stops
+    // InkWell/Tooltip from contributing their own separate (and here,
+    // redundant or unlabelled) semantics nodes underneath this one.
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: tooltip,
+      onTap: onPressed,
+      child: ExcludeSemantics(child: button),
+    );
   }
 }
