@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/chat/chat_screen.dart';
 import '../../features/gallery/gallery_screen.dart';
 import '../../features/shell/placeholder_screen.dart';
 
@@ -36,7 +37,7 @@ final appRouter = GoRouter(
           routes: [
             GoRoute(
               path: '/chat',
-              builder: (context, state) => const PlaceholderScreen(title: 'Chat'),
+              builder: (context, state) => const ChatScreen(),
             ),
           ],
         ),
