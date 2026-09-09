@@ -14,4 +14,38 @@ void main() {
     expect(AppColors.alertSeverity('Unknown'), const Color(0xFFD98E2B));
     expect(AppColors.alertSeverity(null), const Color(0xFFD98E2B));
   });
+
+  test('onAlertSeverity always picks the higher-contrast of the two label colors', () {
+    double contrastRatio(Color a, Color b) {
+      final lumA = a.computeLuminance();
+      final lumB = b.computeLuminance();
+      final brighter = lumA > lumB ? lumA : lumB;
+      final darker = lumA > lumB ? lumB : lumA;
+      return (brighter + 0.05) / (darker + 0.05);
+    }
+
+    for (final severity in ['Minor', 'Moderate', 'Severe', 'Extreme']) {
+      final background = AppColors.alertSeverity(severity);
+      final label = AppColors.onAlertSeverity(severity);
+      final inkContrast = contrastRatio(background, AppColors.monsoonInk);
+      final cloudContrast = contrastRatio(background, AppColors.cloudlight);
+      final expected = inkContrast >= cloudContrast ? AppColors.monsoonInk : AppColors.cloudlight;
+
+      expect(label, expected,
+          reason: '$severity: ink contrast $inkContrast, cloud contrast $cloudContrast');
+
+      // The winning color must clear the WCAG AA body-text bar (4.5:1)
+      // against its own background — the real accessibility assertion.
+      final winningContrast = label == AppColors.monsoonInk ? inkContrast : cloudContrast;
+      expect(winningContrast, greaterThanOrEqualTo(4.5),
+          reason: '$severity label/background contrast too low: $winningContrast');
+    }
+  });
+
+  test('onAlertSeverity is near-white on the two dark severities and Monsoon Ink on the two light ones', () {
+    expect(AppColors.onAlertSeverity('Severe'), AppColors.cloudlight);
+    expect(AppColors.onAlertSeverity('Extreme'), AppColors.cloudlight);
+    expect(AppColors.onAlertSeverity('Minor'), AppColors.monsoonInk);
+    expect(AppColors.onAlertSeverity('Moderate'), AppColors.monsoonInk);
+  });
 }

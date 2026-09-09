@@ -67,7 +67,10 @@ class GalleryScreen extends ConsumerWidget {
             children: [
               for (final severity in ['Minor', 'Moderate', 'Severe', 'Extreme'])
                 Chip(
-                  label: Text(severity),
+                  label: Text(
+                    severity,
+                    style: TextStyle(color: AppColors.onAlertSeverity(severity)),
+                  ),
                   backgroundColor: AppColors.alertSeverity(severity),
                 ),
             ],

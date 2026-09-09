@@ -46,4 +46,32 @@ class AppColors {
         return _severityModerate;
     }
   }
+
+  /// Returns a readable label color for text drawn on top of
+  /// [alertSeverity]'s background for the same [capSeverity]. Computed
+  /// from the background color's actual luminance
+  /// ([Color.computeLuminance]) rather than a hardcoded per-name guess,
+  /// so it stays correct if the severity hex values ever change.
+  ///
+  /// Picks whichever of [monsoonInk] / [cloudlight] yields the higher
+  /// WCAG contrast ratio against the background — not a flat "luminance
+  /// > 0.5" split, which (checked against these actual hex values) would
+  /// wrongly hand Moderate's mid-luminance orange a near-white label
+  /// even though Monsoon Ink contrasts against it far better.
+  static Color onAlertSeverity(String? capSeverity) {
+    final background = alertSeverity(capSeverity);
+    final contrastWithInk = _contrastRatio(background, monsoonInk);
+    final contrastWithCloud = _contrastRatio(background, cloudlight);
+    return contrastWithInk >= contrastWithCloud ? monsoonInk : cloudlight;
+  }
+
+  /// WCAG relative-luminance contrast ratio between two colors, in
+  /// [1, 21] — see https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio.
+  static double _contrastRatio(Color a, Color b) {
+    final lumA = a.computeLuminance();
+    final lumB = b.computeLuminance();
+    final brighter = lumA > lumB ? lumA : lumB;
+    final darker = lumA > lumB ? lumB : lumA;
+    return (brighter + 0.05) / (darker + 0.05);
+  }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
 
 class AppChip extends StatelessWidget {
@@ -19,6 +20,7 @@ class AppChip extends StatelessWidget {
       label: Text(label),
       selected: selected,
       onSelected: onTap == null ? null : (_) => onTap!(),
+      selectedColor: AppColors.marigold.withValues(alpha: 0.24),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.control),
       ),
