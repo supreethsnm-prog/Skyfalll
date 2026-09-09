@@ -136,6 +136,66 @@ tab among four). Design, grounded in what `POST /chat` actually returns
   the pending assistant turn, with Retry re-sending the same user
   message — never a full-screen error that loses the conversation.
 
+## 6c. Home screen design
+
+Grounded in the actual verified response shapes (read directly from
+backend source during planning, not assumed):
+
+- `GET /weather` → `temperature_c, humidity_pct, weather_code,
+  wind_speed_kmh, wind_direction_deg, observed_at, timezone,
+  fetched_at` (plus lat/lon). **No "feels like"/apparent-temperature
+  field exists** — an earlier draft of this spec mentioned one; that
+  was wrong and is corrected here. Home shows only what the API
+  actually returns.
+- `GET /forecast?days=N` → a list of `{forecast_date, weather_code,
+  temp_max_c, temp_min_c, precip_probability_pct, precip_sum_mm,
+  wind_speed_max_kmh, fetched_at}`.
+- `GET /alerts` → the full nationwide list (no lat/lon filtering
+  server-side — see §8's known gap), each entry `{id, external_id,
+  source, severity, event_type, area_description,
+  effective_start_time, effective_end_time, warning_message, latitude,
+  longitude, fetched_at}`. Note the row also carries a `severity_color`
+  field from the upstream SACHET feed — **the frontend ignores it** and
+  uses its own `AppColors.alertSeverity(severity)` mapping instead, for
+  visual consistency with the rest of the app's design system rather
+  than an externally-sourced color.
+- `GET /geocode?q=` → `{query, display_name, latitude, longitude,
+  country, state, fetched_at}`, 404 if not found.
+
+**Layout** (left-aligned, per the design system's established
+convention):
+1. **Location bar** — the current location's display name + a search
+   affordance opening a location picker (a modal using `GET /geocode`).
+   No GPS/device-location integration in this phase (no location
+   permission plumbing exists yet, and it isn't needed to demo a
+   specific city) — the app starts at a fixed default location and the
+   user switches it via search. This is a real, deliberate scope cut,
+   not an oversight.
+2. **Current conditions hero** — large temperature (`AppTypography.display`),
+   a condition icon (`weatherIconFor(weather_code)`, already built),
+   humidity and wind as secondary stats (`AppTypography.body`/`caption`)
+   — no fabricated "feels like" value.
+3. **Alert banner** — shown only when at least one alert's own lat/lon
+   is within a fixed radius (e.g. 100km, matching the backend's own
+   `warning_service.list_alerts`'s existing default radius constant) of
+   the current location, computed client-side via a small haversine
+   helper (mirroring the backend's `app/geo.py` formula) since the
+   `/alerts` endpoint doesn't filter server-side. Uses
+   `AppColors.alertSeverity`/`onAlertSeverity` for severity coloring —
+   both already built and tested in Phase 0.
+4. **Forecast strip** — a short horizontal preview of the next few
+   `/forecast` days (icon + high/low), not the full multi-day view
+   (that's the dedicated Forecast screen, a later phase) — tapping it
+   navigates to the `/forecast` tab.
+5. **Quick actions** — a row of `AppChip`s with example questions that
+   navigate to `/chat` and send the tapped question, reusing the exact
+   pattern Chat's own empty-state already established.
+
+**Loading/error/empty states**: `LoadingView` while the initial fetch is
+in flight, `ErrorView` with Retry on failure (matching Chat's error
+pattern), and a location-not-found message (not a generic error) when
+`GET /geocode` 404s during a search.
+
 ## 6b. Environment note: no Android emulator on this hardware
 
 Recorded here because it affects every future phase's verification
@@ -198,7 +258,17 @@ project has shipped:
   of the tokens. **Shipped** — merged to main, 30 tests passing.
 - **Phase 1** — Chat (see §6a). Reordered ahead of Home per a live
   mid-build instruction restating the goal as a ChatGPT-style app —
-  chat is the product's center, not one tab among four.
+  chat is the product's center, not one tab among four. **Shipped** —
+  merged to main, 58 tests passing. Final review caught and fixed a real
+  bug the per-task reviews couldn't see: the backend's tool-calling
+  turns (`role: "assistant"` + a `tool_calls` key, `content` often
+  `""`) were rendering as blank assistant bubbles on nearly every real
+  query, since the system prompt requires tool use for most
+  weather/alert questions. Fixed by rejecting any entry carrying
+  `tool_calls` or empty/whitespace content in `ChatTurn.tryFromRaw`.
+  Also fixed: sending a new message while in a failed state silently
+  discarded the failed message with no trace — composer is now locked
+  to `ChatIdle` only, forcing Retry as the sole path out of a failure.
 - **Phase 2** — Home screen, visually iterated (see §12).
 - **Phase 3** — Forecast, Alerts (+ live WS), Historical, Advisories.
 
