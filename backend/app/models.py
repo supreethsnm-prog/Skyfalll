@@ -48,12 +48,41 @@ class WeatherReading(Base):
     apparent_temperature_c = Column(Float, nullable=True)
     pressure_hpa = Column(Float, nullable=True)
     dew_point_c = Column(Float, nullable=True)
+    visibility_km = Column(Float, nullable=True)
 
     # Hourly series for the Home strip: a JSON array of
     # {time, temperature_c, weather_code}. It lives on this row rather than
     # in its own table because it comes from the same upstream call and
     # expires with the same TTL.
     hourly = Column(JSONB, nullable=True)
+
+
+class AirQualityReading(Base):
+    """Cached air-quality observations, keyed like WeatherReading.
+
+    A separate table rather than columns on weather_readings: this comes
+    from a different upstream host with different availability, and it
+    expires on its own (slower) schedule.
+    """
+
+    __tablename__ = "air_quality_readings"
+    __table_args__ = (
+        UniqueConstraint(
+            "latitude", "longitude", name="uq_air_quality_readings_lat_lon"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    observed_at = Column(String, nullable=False)
+    raw_payload = Column(JSONB, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), nullable=False)
+
+    # Nullable: sparser coverage than the weather model. See AirQualityData.
+    us_aqi = Column(Float, nullable=True)
+    pm2_5 = Column(Float, nullable=True)
+    pm10 = Column(Float, nullable=True)
 
 
 class GeocodeCache(Base):

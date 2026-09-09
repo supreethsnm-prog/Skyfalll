@@ -4,6 +4,7 @@ from sqlalchemy import delete, text
 from app.config import get_settings
 from app.db import get_engine
 from app.models import (
+    AirQualityReading,
     Alert,
     GeocodeCache,
     GfsForecastPoint,
@@ -81,6 +82,13 @@ def clean_weather_readings():
     _truncate(WeatherReading)
     yield
     _truncate(WeatherReading)
+
+
+@pytest.fixture
+def clean_air_quality_readings():
+    _truncate(AirQualityReading)
+    yield
+    _truncate(AirQualityReading)
 
 
 @pytest.fixture

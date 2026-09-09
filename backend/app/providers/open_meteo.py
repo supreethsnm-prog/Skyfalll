@@ -11,7 +11,9 @@ _CURRENT_FIELDS = (
     "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,"
     "wind_direction_10m,apparent_temperature,pressure_msl,dew_point_2m"
 )
-_HOURLY_FIELDS = "temperature_2m,weather_code"
+# `visibility` is hourly-only upstream — Open-Meteo does not offer it in
+# the `current` block — so it is read from the hour matching `observed_at`.
+_HOURLY_FIELDS = "temperature_2m,weather_code,visibility"
 _DAILY_FIELDS = (
     "weather_code,temperature_2m_max,temperature_2m_min,"
     "precipitation_probability_max,precipitation_sum,wind_speed_10m_max,"
@@ -33,6 +35,44 @@ def _daily_at(daily: dict, field: str, index: int):
     if not isinstance(values, list) or index >= len(values):
         return None
     return values[index]
+
+
+def hour_key(timestamp: str) -> str:
+    """An Open-Meteo timestamp truncated to its hour.
+
+    The `current` block reports at 15-minute granularity ("...T20:45")
+    while the `hourly` block is always on the hour ("...T20:00"), so the
+    two never match on equality. Comparing the "YYYY-MM-DDTHH" prefix is
+    what lets a current reading be located within the hourly series.
+    """
+    return timestamp[:13]
+
+
+def _visibility_km_at(payload: dict, observed_at: str) -> float | None:
+    """Visibility for the hour containing `observed_at`, converted to km.
+
+    Open-Meteo publishes visibility only in the hourly block and only in
+    metres, so this locates the containing hour and converts. Returns None
+    if the block, the field, or that hour is missing — visibility is
+    supplementary and must never fail a current-conditions fetch.
+    """
+    hourly = payload.get("hourly")
+    if not isinstance(hourly, dict):
+        return None
+
+    times = hourly.get("time")
+    values = hourly.get("visibility")
+    if not times or not values:
+        return None
+
+    target = hour_key(observed_at)
+    index = next(
+        (i for i, t in enumerate(times) if hour_key(t) == target),
+        None,
+    )
+    if index is None or index >= len(values) or values[index] is None:
+        return None
+    return values[index] / 1000.0
 
 
 def _zip_hourly(payload: dict) -> list[dict] | None:
@@ -98,6 +138,7 @@ class OpenMeteoWeatherProvider:
                     pressure_hpa=current.get("pressure_msl"),
                     dew_point_c=current.get("dew_point_2m"),
                     hourly=_zip_hourly(payload),
+                    visibility_km=_visibility_km_at(payload, current["time"]),
                 )
             except (KeyError, TypeError) as exc:
                 logger.warning(

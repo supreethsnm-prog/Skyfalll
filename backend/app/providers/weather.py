@@ -22,6 +22,10 @@ class WeatherReadingData:
     pressure_hpa: float | None = None
     dew_point_c: float | None = None
 
+    # Upstream publishes this hourly and in metres; the provider picks the
+    # hour matching observed_at and converts to km.
+    visibility_km: float | None = None
+
     # Hourly series: [{"time": str, "temperature_c": float,
     # "weather_code": int}, ...], oldest first, exactly as upstream
     # ordered it. Trimming to a display window is the service's job.

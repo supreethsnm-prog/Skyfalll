@@ -24,6 +24,7 @@ def test_weather_readings_table_exists_with_expected_columns():
         "apparent_temperature_c",
         "pressure_hpa",
         "dew_point_c",
+        "visibility_km",
         "hourly",
     }
 

@@ -28,6 +28,7 @@ from app.aviation.service import get_metar
 from app.chat.service import chat_turn
 from app.config import get_settings
 from app.db import check_db_connection
+from app.air_quality.service import get_air_quality
 from app.forecast.service import get_forecast
 from app.geocoding.service import geocode_place
 from app.history.service import get_historical_weather
@@ -189,6 +190,14 @@ def get_weather_endpoint(
     lon: float = Query(..., ge=-180, le=180),
 ) -> dict:
     return get_weather(lat, lon)
+
+
+@app.get("/air-quality")
+def get_air_quality_endpoint(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+) -> dict:
+    return get_air_quality(lat, lon)
 
 
 @app.get("/forecast")

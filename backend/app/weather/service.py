@@ -21,7 +21,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db import get_engine
 from app.models import WeatherReading
-from app.providers.open_meteo import OpenMeteoWeatherProvider
+from app.providers.open_meteo import OpenMeteoWeatherProvider, hour_key
 from app.providers.weather import WeatherProvider
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,7 @@ _RESPONSE_FIELDS = (
     "apparent_temperature_c",
     "pressure_hpa",
     "dew_point_c",
+    "visibility_km",
     "hourly",
 )
 
@@ -59,6 +60,7 @@ _MUTABLE_COLUMNS = (
     "apparent_temperature_c",
     "pressure_hpa",
     "dew_point_c",
+    "visibility_km",
     "hourly",
 )
 
@@ -75,14 +77,20 @@ def _trim_hourly(hourly, observed_at: str):
     because the provider's job is to report what upstream said, and the
     cached row keeps the full series for any other consumer.
 
-    String comparison is deliberate and safe: both values are Open-Meteo
-    ISO-8601 local timestamps of identical width from the same response,
-    so lexicographic order equals chronological order without parsing.
+    Both sides are compared at hour granularity via `hour_key`: the
+    `current` block reports at 15-minute granularity ("...T20:45") while
+    the hourly series is on the hour ("...T20:00"), so comparing the raw
+    strings would drop the hour the user is actually in and start the
+    strip an hour late. Lexicographic order equals chronological order for
+    these fixed-width ISO timestamps, so no parsing is needed.
     """
     if not hourly:
         return hourly
 
-    upcoming = [entry for entry in hourly if entry.get("time", "") >= observed_at]
+    cutoff = hour_key(observed_at)
+    upcoming = [
+        entry for entry in hourly if hour_key(entry.get("time", "")) >= cutoff
+    ]
     # A series entirely in the past means the cached row is stale in a way
     # the TTL did not catch; showing its tail beats showing nothing.
     return (upcoming or hourly)[:_HOURLY_WINDOW]
@@ -152,6 +160,7 @@ def get_weather(
             apparent_temperature_c=reading.apparent_temperature_c,
             pressure_hpa=reading.pressure_hpa,
             dew_point_c=reading.dew_point_c,
+            visibility_km=reading.visibility_km,
             hourly=reading.hourly,
         )
         stmt = stmt.on_conflict_do_update(
