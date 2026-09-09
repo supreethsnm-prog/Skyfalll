@@ -1,62 +1,29 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../features/gallery/gallery_screen.dart';
-import '../../features/shell/placeholder_screen.dart';
 
+import '../../features/chat/chat_screen.dart';
+import '../../features/gallery/gallery_screen.dart';
+import '../../features/home/home_screen.dart';
+
+/// A plain route stack — deliberately **no** bottom navigation bar.
+///
+/// The previous shell used `StatefulShellRoute.indexedStack` with a
+/// four-tab `NavigationBar`. Neither reference app has one, and it was the
+/// single biggest reason the first build read as a generic Android app
+/// rather than the product the references show. Navigation now lives in
+/// the drawer (`AppDrawer`), reachable from the chrome on every screen.
+///
+/// `app_router_test.dart` asserts the absence of `NavigationBar`, so the
+/// tab bar cannot quietly come back.
 final appRouter = GoRouter(
   initialLocation: '/home',
   routes: [
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, navigationShell) => Scaffold(
-        body: navigationShell,
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: navigationShell.currentIndex,
-          onDestinationSelected: navigationShell.goBranch,
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-            NavigationDestination(icon: Icon(Icons.chat_outlined), label: 'Chat'),
-            NavigationDestination(
-              icon: Icon(Icons.calendar_month_outlined),
-              label: 'Forecast',
-            ),
-            NavigationDestination(icon: Icon(Icons.apps_outlined), label: 'More'),
-          ],
-        ),
-      ),
-      branches: [
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/home',
-              builder: (context, state) => const PlaceholderScreen(title: 'Home'),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/chat',
-              builder: (context, state) => const PlaceholderScreen(title: 'Chat'),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/forecast',
-              builder: (context, state) => const PlaceholderScreen(title: 'Forecast'),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/more',
-              builder: (context, state) => const PlaceholderScreen(title: 'More'),
-            ),
-          ],
-        ),
-      ],
+    GoRoute(
+      path: '/home',
+      builder: (context, state) => const HomeScreen(),
+    ),
+    GoRoute(
+      path: '/chat',
+      builder: (context, state) => const ChatScreen(),
     ),
     GoRoute(
       path: '/gallery',

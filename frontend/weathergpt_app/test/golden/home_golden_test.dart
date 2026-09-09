@@ -125,9 +125,13 @@ Future<void> _pumpHome(
   int code = 63,
   List<AlertSummary> alerts = const [],
   bool fail = false,
+  // Home scrolls past a phone viewport. A taller surface renders the whole
+  // page into one image for design review and for the pitch deck; the
+  // default height is a real phone, showing what actually fits on screen.
+  double height = 880,
 }) async {
   const dpr = 2.0;
-  tester.view.physicalSize = const Size(400 * dpr, 880 * dpr);
+  tester.view.physicalSize = Size(400 * dpr, height * dpr);
   tester.view.devicePixelRatio = dpr;
   addTearDown(tester.view.reset);
 
@@ -181,6 +185,20 @@ void main() {
     await expectLater(
       find.byType(HomeScreen),
       matchesGoldenFile('goldens/home_clear.png'),
+    );
+  });
+
+  testWidgets('home — full page, every tile', (tester) async {
+    await _pumpHome(
+      tester,
+      now: DateTime(2026, 9, 9, 11),
+      code: 0,
+      height: 1500,
+    );
+
+    await expectLater(
+      find.byType(HomeScreen),
+      matchesGoldenFile('goldens/home_full.png'),
     );
   });
 

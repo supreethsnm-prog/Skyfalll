@@ -6,11 +6,12 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/sky_gradient.dart';
 import '../../shared/error_message.dart';
+import '../shell/app_drawer.dart';
 import '../../shared/widgets/app_menu.dart';
 import '../../shared/widgets/round_icon_button.dart';
 import 'home_controller.dart';
 import 'widgets/alert_banner.dart';
-import 'widgets/conditions_panel.dart';
+import 'widgets/detail_tiles.dart';
 import 'widgets/forecast_panel.dart';
 import 'widgets/home_hero.dart';
 
@@ -60,7 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final foreground = skyForeground(time, condition);
 
     return Scaffold(
-      drawer: const Drawer(),
+      drawer: const AppDrawer(),
       backgroundColor: AppColors.bgBase,
       body: Container(
         decoration: BoxDecoration(gradient: skyGradient(time, condition)),
@@ -189,16 +190,22 @@ class _LoadedView extends StatelessWidget {
             high: today?.tempMaxC,
             low: today?.tempMinC,
           ),
+          const SizedBox(height: AppSpacing.md),
+          AqiPill(foreground: foreground),
           const SizedBox(height: AppSpacing.xxl),
           for (final alert in state.nearbyAlerts) ...[
             AlertBanner(alert: alert),
             const SizedBox(height: AppSpacing.md),
           ],
+          HourlyPanel(foreground: foreground),
+          const SizedBox(height: AppSpacing.md),
           if (state.forecast.isNotEmpty) ...[
             ForecastPanel(days: state.forecast, foreground: foreground),
             const SizedBox(height: AppSpacing.md),
           ],
-          ConditionsPanel(weather: state.weather, foreground: foreground),
+          DetailGrid(weather: state.weather, foreground: foreground),
+          const SizedBox(height: AppSpacing.md),
+          SunPanel(foreground: foreground),
         ],
       ),
     );
