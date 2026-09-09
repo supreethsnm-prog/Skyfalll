@@ -66,6 +66,32 @@ void main() {
     expect(find.text('Model Selection Strategy'), findsOneWidget);
   });
 
+  testWidgets('hangs below its launcher instead of covering it',
+      (tester) async {
+    // Regression: the menu originally anchored at the launcher's TOP edge,
+    // so it rendered directly over the button the user had just tapped.
+    // Caught by eye in the Task 6 gallery golden, not by any unit test.
+    await tester.pumpWidget(harness([
+      AppMenuItem(icon: Icons.share_outlined, label: 'Share', onTap: () {}),
+    ]));
+
+    final launcher = tester.getRect(find.text('open'));
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    final panel = tester
+        .widgetList<Container>(find.byType(Container))
+        .firstWhere((c) =>
+            c.decoration is BoxDecoration &&
+            (c.decoration as BoxDecoration).color == AppColors.surfaceRaised);
+
+    expect(
+      tester.getRect(find.byWidget(panel)).top,
+      greaterThanOrEqualTo(launcher.bottom),
+    );
+  });
+
   testWidgets('is 191dp wide with a 16dp radius, filled with surfaceRaised',
       (tester) async {
     await tester.pumpWidget(harness([

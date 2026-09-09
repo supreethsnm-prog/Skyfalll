@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/gallery/gallery_screen.dart';
 import '../../features/shell/placeholder_screen.dart';
 
 final appRouter = GoRouter(
@@ -59,7 +60,7 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/gallery',
-      builder: (context, state) => const PlaceholderScreen(title: 'Gallery'),
+      builder: (context, state) => const GalleryScreen(),
     ),
   ],
 );

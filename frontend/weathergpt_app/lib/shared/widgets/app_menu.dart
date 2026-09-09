@@ -122,23 +122,39 @@ class _AppMenuLayoutDelegate extends SingleChildLayoutDelegate {
     return BoxConstraints.loose(constraints.biggest);
   }
 
+  /// Gap between the anchor and the menu, matching the reference's
+  /// breathing room under the 3-dot button.
+  static const double _anchorGap = AppSpacing.sm;
+
   @override
   Offset getPositionForChild(Size size, Size childSize) {
-    double dx = position.left;
-    double dy = position.top;
+    // `position` is the ANCHOR's rect (the button that opened the menu),
+    // so the menu hangs off its bottom edge — it must never cover the
+    // control the user just tapped.
+    final anchorBottom = size.height - position.bottom;
 
-    // Keep the menu on-screen, anchored to the button's rect.
+    double dx = position.left;
+    double dy = anchorBottom + _anchorGap;
+
+    // Flip above the anchor when there is no room below it, rather than
+    // sliding up to overlap it.
+    if (dy + childSize.height > size.height - AppSpacing.sm) {
+      final above = position.top - _anchorGap - childSize.height;
+      dy = above >= AppSpacing.sm
+          ? above
+          : size.height - childSize.height - AppSpacing.sm;
+    }
+    if (dy < AppSpacing.sm) {
+      dy = AppSpacing.sm;
+    }
+
+    // Right-align to the anchor when a left-aligned menu would overflow —
+    // this is what puts a top-right overflow menu under its own button.
     if (dx + childSize.width > size.width - AppSpacing.sm) {
       dx = size.width - childSize.width - AppSpacing.sm;
     }
     if (dx < AppSpacing.sm) {
       dx = AppSpacing.sm;
-    }
-    if (dy + childSize.height > size.height - AppSpacing.sm) {
-      dy = size.height - childSize.height - AppSpacing.sm;
-    }
-    if (dy < AppSpacing.sm) {
-      dy = AppSpacing.sm;
     }
 
     return Offset(dx, dy);
