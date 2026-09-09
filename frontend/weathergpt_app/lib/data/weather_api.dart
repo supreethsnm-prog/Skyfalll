@@ -8,6 +8,12 @@ import '../core/network/api_client.dart';
 /// JSON integer depending on serialization.
 double _asDouble(dynamic value) => (value as num).toDouble();
 
+/// Nullable numeric field. Every rich weather field is optional upstream —
+/// Open-Meteo omits them for some points — and a missing reading must stay
+/// null rather than becoming 0, which would render as a real measurement.
+double? _asDoubleOrNull(dynamic value) =>
+    value == null ? null : (value as num).toDouble();
+
 class CurrentWeather {
   final double temperatureC;
   final double humidityPct;
@@ -17,6 +23,16 @@ class CurrentWeather {
   final String observedAt;
   final String timezone;
 
+  /// All nullable — see [_asDoubleOrNull].
+  final double? apparentTemperatureC;
+  final double? pressureHpa;
+  final double? dewPointC;
+  final double? visibilityKm;
+
+  /// The next 24 hours, already trimmed by the backend. Null when the
+  /// cached reading predates the field.
+  final List<HourlyPoint>? hourly;
+
   const CurrentWeather({
     required this.temperatureC,
     required this.humidityPct,
@@ -25,6 +41,11 @@ class CurrentWeather {
     required this.windDirectionDeg,
     required this.observedAt,
     required this.timezone,
+    this.apparentTemperatureC,
+    this.pressureHpa,
+    this.dewPointC,
+    this.visibilityKm,
+    this.hourly,
   });
 
   factory CurrentWeather.fromJson(Map<String, dynamic> json) {
@@ -36,6 +57,13 @@ class CurrentWeather {
       windDirectionDeg: _asDouble(json['wind_direction_deg']),
       observedAt: json['observed_at'] as String,
       timezone: json['timezone'] as String,
+      apparentTemperatureC: _asDoubleOrNull(json['apparent_temperature_c']),
+      pressureHpa: _asDoubleOrNull(json['pressure_hpa']),
+      dewPointC: _asDoubleOrNull(json['dew_point_c']),
+      visibilityKm: _asDoubleOrNull(json['visibility_km']),
+      hourly: (json['hourly'] as List<dynamic>?)
+          ?.map((e) => HourlyPoint.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 }
@@ -46,11 +74,20 @@ class ForecastDay {
   final double tempMaxC;
   final double tempMinC;
 
+  /// Nullable, as on [CurrentWeather]. Sun times are the upstream ISO
+  /// strings; the UI formats them for display.
+  final double? uvIndexMax;
+  final String? sunrise;
+  final String? sunset;
+
   const ForecastDay({
     required this.forecastDate,
     required this.weatherCode,
     required this.tempMaxC,
     required this.tempMinC,
+    this.uvIndexMax,
+    this.sunrise,
+    this.sunset,
   });
 
   factory ForecastDay.fromJson(Map<String, dynamic> json) {
@@ -59,6 +96,30 @@ class ForecastDay {
       weatherCode: json['weather_code'] as int,
       tempMaxC: _asDouble(json['temp_max_c']),
       tempMinC: _asDouble(json['temp_min_c']),
+      uvIndexMax: _asDoubleOrNull(json['uv_index_max']),
+      sunrise: json['sunrise'] as String?,
+      sunset: json['sunset'] as String?,
+    );
+  }
+}
+
+/// One hour of the forecast strip.
+class HourlyPoint {
+  final String time;
+  final double temperatureC;
+  final int weatherCode;
+
+  const HourlyPoint({
+    required this.time,
+    required this.temperatureC,
+    required this.weatherCode,
+  });
+
+  factory HourlyPoint.fromJson(Map<String, dynamic> json) {
+    return HourlyPoint(
+      time: json['time'] as String,
+      temperatureC: _asDouble(json['temperature_c']),
+      weatherCode: json['weather_code'] as int,
     );
   }
 }

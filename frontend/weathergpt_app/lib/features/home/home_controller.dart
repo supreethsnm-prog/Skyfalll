@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/geo.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/app_error.dart';
+import '../../data/air_quality_api.dart';
 import '../../data/alerts_api.dart';
 import '../../data/geocoding_api.dart';
 import '../../data/weather_api.dart';
@@ -33,11 +34,17 @@ class HomeLoaded extends HomeUiState {
   final List<ForecastDay> forecast;
   final List<AlertSummary> nearbyAlerts;
 
+  /// Null when the air-quality call failed. Deliberately optional: unlike
+  /// the other three fetches, a missing AQI reading does NOT fail the
+  /// screen — see the note in [HomeController._load].
+  final AirQuality? airQuality;
+
   const HomeLoaded({
     required this.location,
     required this.weather,
     required this.forecast,
     required this.nearbyAlerts,
+    this.airQuality,
   });
 }
 
@@ -50,6 +57,8 @@ class HomeError extends HomeUiState {
 final weatherApiProvider = Provider<WeatherApi>((ref) => WeatherApi(buildApiClient()));
 final alertsApiProvider = Provider<AlertsApi>((ref) => AlertsApi(buildApiClient()));
 final geocodingApiProvider = Provider<GeocodingApi>((ref) => GeocodingApi(buildApiClient()));
+final airQualityApiProvider =
+    Provider<AirQualityApi>((ref) => AirQualityApi(buildApiClient()));
 
 final homeControllerProvider =
     NotifierProvider<HomeController, HomeUiState>(HomeController.new);
@@ -75,6 +84,17 @@ class HomeController extends Notifier<HomeUiState> {
     state = const HomeLoading();
     final weatherApi = ref.read(weatherApiProvider);
     final alertsApi = ref.read(alertsApiProvider);
+    final airQualityApi = ref.read(airQualityApiProvider);
+
+    // Air quality is fetched alongside the others but is deliberately
+    // EXEMPT from this controller's otherwise all-or-nothing rule: it
+    // comes from a different upstream host, so its outage must not blank
+    // a weather screen that is otherwise fine. A failure here leaves
+    // airQuality null and the AQI pill simply does not render.
+    final airQualityFuture = airQualityApi
+        .fetchCurrent(location.latitude, location.longitude)
+        .then<AirQuality?>((value) => value)
+        .catchError((_) => null);
 
     try {
       final results = await Future.wait([
@@ -103,6 +123,7 @@ class HomeController extends Notifier<HomeUiState> {
         weather: weather,
         forecast: forecast,
         nearbyAlerts: nearbyAlerts,
+        airQuality: await airQualityFuture,
       );
     } on AppError catch (e) {
       _location = location;

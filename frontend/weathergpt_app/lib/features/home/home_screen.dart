@@ -204,21 +204,35 @@ class _LoadedView extends StatelessWidget {
             low: today?.tempMinC,
           ),
           const SizedBox(height: AppSpacing.md),
-          AqiPill(foreground: foreground),
+          AqiPill(airQuality: state.airQuality, foreground: foreground),
           const SizedBox(height: AppSpacing.xxl),
           for (final alert in state.nearbyAlerts) ...[
             AlertBanner(alert: alert),
             const SizedBox(height: AppSpacing.md),
           ],
-          HourlyPanel(foreground: foreground),
-          const SizedBox(height: AppSpacing.md),
+          if (state.weather.hourly != null) ...[
+            HourlyPanel(
+              hours: state.weather.hourly!,
+              foreground: foreground,
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           if (state.forecast.isNotEmpty) ...[
             ForecastPanel(days: state.forecast, foreground: foreground),
             const SizedBox(height: AppSpacing.md),
           ],
-          DetailGrid(weather: state.weather, foreground: foreground),
+          DetailGrid(
+            weather: state.weather,
+            foreground: foreground,
+            uvIndexMax: today?.uvIndexMax,
+            airQuality: state.airQuality,
+          ),
           const SizedBox(height: AppSpacing.md),
-          SunPanel(foreground: foreground),
+          SunPanel(
+            foreground: foreground,
+            sunrise: today?.sunrise,
+            sunset: today?.sunset,
+          ),
         ],
       ),
     );

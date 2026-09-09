@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/network/app_error.dart';
 import 'package:weathergpt_app/core/theme/app_theme.dart';
+import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
@@ -52,14 +53,32 @@ CurrentWeather _weather({int code = 63}) => CurrentWeather(
       windDirectionDeg: 247,
       observedAt: '2026-09-09T14:00',
       timezone: 'Asia/Kolkata',
+      apparentTemperatureC: 27.6,
+      pressureHpa: 1004.2,
+      dewPointC: 21.3,
+      visibilityKm: 6.4,
+      hourly: const [
+        HourlyPoint(time: '2026-09-09T14:00', temperatureC: 24.4, weatherCode: 3),
+        HourlyPoint(time: '2026-09-09T15:00', temperatureC: 25.1, weatherCode: 3),
+        HourlyPoint(time: '2026-09-09T16:00', temperatureC: 25.4, weatherCode: 80),
+        HourlyPoint(time: '2026-09-09T17:00', temperatureC: 24.8, weatherCode: 61),
+        HourlyPoint(time: '2026-09-09T18:00', temperatureC: 23.9, weatherCode: 63),
+        HourlyPoint(time: '2026-09-09T19:00', temperatureC: 23.2, weatherCode: 63),
+        HourlyPoint(time: '2026-09-09T20:00', temperatureC: 22.8, weatherCode: 61),
+        HourlyPoint(time: '2026-09-09T21:00', temperatureC: 22.4, weatherCode: 80),
+      ],
     );
 
 final _forecast = <ForecastDay>[
   const ForecastDay(
-      forecastDate: '2026-09-09',
-      weatherCode: 63,
-      tempMaxC: 28.4,
-      tempMinC: 23.1),
+    forecastDate: '2026-09-09',
+    weatherCode: 63,
+    tempMaxC: 28.4,
+    tempMinC: 23.1,
+    uvIndexMax: 7.35,
+    sunrise: '2026-09-09T06:12',
+    sunset: '2026-09-09T18:42',
+  ),
   const ForecastDay(
       forecastDate: '2026-09-10',
       weatherCode: 80,
@@ -106,6 +125,27 @@ class _FakeWeatherApi implements WeatherApi {
       super.noSuchMethod(invocation);
 }
 
+class _FakeAirQualityApi implements AirQualityApi {
+  _FakeAirQualityApi({this.fail = false});
+
+  final bool fail;
+
+  @override
+  Future<AirQuality> fetchCurrent(double lat, double lon) async {
+    if (fail) throw const NetworkConnectionError();
+    return const AirQuality(
+      observedAt: '2026-09-09T14:00',
+      usAqi: 156,
+      pm25: 64.8,
+      pm10: 118.2,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
+
 class _FakeAlertsApi implements AlertsApi {
   _FakeAlertsApi({this.alerts = const []});
 
@@ -141,6 +181,8 @@ Future<void> _pumpHome(
         weatherApiProvider
             .overrideWithValue(_FakeWeatherApi(code: code, fail: fail)),
         alertsApiProvider.overrideWithValue(_FakeAlertsApi(alerts: alerts)),
+        airQualityApiProvider
+            .overrideWithValue(_FakeAirQualityApi(fail: fail)),
       ],
       child: MaterialApp(
         theme: AppTheme.dark,

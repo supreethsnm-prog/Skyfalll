@@ -1,3 +1,4 @@
+import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
@@ -42,6 +43,22 @@ class FakeWeatherApi implements WeatherApi {
       super.noSuchMethod(invocation);
 }
 
+class FakeAirQualityApi implements AirQualityApi {
+  @override
+  Future<AirQuality> fetchCurrent(double lat, double lon) async {
+    return const AirQuality(
+      observedAt: '2026-09-09T14:00',
+      usAqi: 156,
+      pm25: 64.8,
+      pm10: 118.2,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
+
 class FakeAlertsApi implements AlertsApi {
   @override
   Future<List<AlertSummary>> fetchAlerts() async => const [];
@@ -59,4 +76,5 @@ class FakeAlertsApi implements AlertsApi {
 final fakeApiOverrides = [
   weatherApiProvider.overrideWithValue(FakeWeatherApi()),
   alertsApiProvider.overrideWithValue(FakeAlertsApi()),
+  airQualityApiProvider.overrideWithValue(FakeAirQualityApi()),
 ];

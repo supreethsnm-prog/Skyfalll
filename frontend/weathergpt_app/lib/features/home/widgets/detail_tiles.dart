@@ -4,24 +4,35 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../data/air_quality_api.dart';
 import '../../../data/weather_api.dart';
 import '../../../shared/widgets/glass_panel.dart';
 import '../../../shared/widgets/weather_icon.dart';
-import '../demo_metrics.dart';
 import '../weather_label.dart';
 
-/// ⚠️ Every widget in this file renders [DemoMetrics] — invented values,
-/// not backend readings. See `demo_metrics.dart` for what replaces them.
+/// Home's supplementary panels, all bound to real backend data.
+///
+/// Every value here is nullable upstream. The rule throughout this file:
+/// **a tile with no value is not rendered at all.** It is never a dash,
+/// never a zero, never "--". Google Weather omits tiles it has no data
+/// for, and a "0" UV index or "0 hPa" reads as a real measurement rather
+/// than as absent data — which on a disaster-advisory app is the kind of
+/// thing that gets believed.
 
-/// The air-quality pill that sits under the temperature on Google
-/// Weather's home screen.
+/// The air-quality pill under the temperature. Returns an empty box when
+/// there is no reading, so the caller needs no null check of its own.
 class AqiPill extends StatelessWidget {
-  const AqiPill({super.key, required this.foreground});
+  const AqiPill({super.key, required this.airQuality, required this.foreground});
 
+  final AirQuality? airQuality;
   final Color foreground;
 
   @override
   Widget build(BuildContext context) {
+    final aqi = airQuality?.usAqi;
+    final band = airQuality?.bandLabel;
+    if (aqi == null || band == null) return const SizedBox.shrink();
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
@@ -38,7 +49,7 @@ class AqiPill extends StatelessWidget {
           Icon(Icons.masks_outlined, size: 16, color: foreground),
           const SizedBox(width: AppSpacing.sm),
           Text(
-            'AQI ${DemoMetrics.aqi} · ${DemoMetrics.aqiLabel}',
+            'AQI ${aqi.round()} · $band',
             style: AppTypography.label(foreground),
           ),
         ],
@@ -48,19 +59,32 @@ class AqiPill extends StatelessWidget {
 }
 
 /// The hourly strip. Horizontally scrollable, one column per hour, with a
-/// simple bar under each temperature standing in for Google Weather's
-/// line graph — a line chart of eight points reads as noise at this size.
+/// bar under each temperature standing in for Google Weather's line graph
+/// — a line through this few points reads as noise at phone width.
 class HourlyPanel extends StatelessWidget {
-  const HourlyPanel({super.key, required this.foreground});
+  const HourlyPanel({super.key, required this.hours, required this.foreground});
 
+  final List<HourlyPoint> hours;
   final Color foreground;
+
+  /// Clock time from an Open-Meteo ISO local timestamp, e.g. "15:00".
+  /// Falls back to the raw string rather than throwing — one odd label
+  /// beats a crashed screen.
+  static String _label(String time, bool isFirst) {
+    if (isFirst) return 'Now';
+    final t = DateTime.tryParse(time);
+    if (t == null) return time;
+    return '${t.hour.toString().padLeft(2, '0')}:00';
+  }
 
   @override
   Widget build(BuildContext context) {
-    const hours = DemoMetrics.hourly;
+    if (hours.isEmpty) return const SizedBox.shrink();
+
     final temps = hours.map((h) => h.temperatureC);
     final min = temps.reduce((a, b) => a < b ? a : b);
     final max = temps.reduce((a, b) => a > b ? a : b);
+    // Guard a flat series: every bar the same height beats a divide by ~0.
     final span = (max - min).abs() < 0.1 ? 1.0 : max - min;
 
     return GlassPanel(
@@ -74,24 +98,24 @@ class HourlyPanel extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                for (final hour in hours)
+                for (var i = 0; i < hours.length; i++)
                   Padding(
                     padding: const EdgeInsets.only(right: AppSpacing.xl),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '${hour.temperatureC.round()}°',
+                          '${hours[i].temperatureC.round()}°',
                           style: AppTypography.label(foreground),
                         ),
                         const SizedBox(height: AppSpacing.sm),
-                        // Bar height encodes the temperature within the
-                        // window's own range, so the shape of the
-                        // afternoon is readable at a glance.
+                        // Bar height encodes the temperature within this
+                        // window's own range, so the shape of the day is
+                        // readable at a glance.
                         Container(
                           width: 3,
                           height: 12 +
-                              28 * ((hour.temperatureC - min) / span),
+                              28 * ((hours[i].temperatureC - min) / span),
                           decoration: BoxDecoration(
                             color: foreground.withValues(alpha: 0.55),
                             borderRadius: BorderRadius.circular(2),
@@ -99,13 +123,13 @@ class HourlyPanel extends StatelessWidget {
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         Icon(
-                          weatherIconFor(hour.weatherCode),
+                          weatherIconFor(hours[i].weatherCode),
                           size: AppRadius.iconSize,
                           color: foreground,
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          hour.label,
+                          _label(hours[i].time, i == 0),
                           style: AppTypography.caption(foreground),
                         ),
                       ],
@@ -120,38 +144,55 @@ class HourlyPanel extends StatelessWidget {
   }
 }
 
-/// The grid of current-conditions detail. Humidity and wind are real
-/// (`GET /weather` returns them); everything else is [DemoMetrics].
+/// The grid of current-conditions detail. Tiles without a value are
+/// dropped before layout, so the grid closes up rather than showing gaps.
 class DetailGrid extends StatelessWidget {
   const DetailGrid({
     super.key,
     required this.weather,
     required this.foreground,
+    this.uvIndexMax,
+    this.airQuality,
   });
 
   final CurrentWeather weather;
   final Color foreground;
+  final double? uvIndexMax;
+  final AirQuality? airQuality;
+
+  /// WHO/WMO UV exposure bands.
+  static String _uvBand(double uv) {
+    if (uv < 3) return 'Low';
+    if (uv < 6) return 'Moderate';
+    if (uv < 8) return 'High';
+    if (uv < 11) return 'Very high';
+    return 'Extreme';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final tiles = <({IconData icon, String label, String value, String sub})>[
-      (
-        icon: Icons.thermostat,
-        label: 'Feels like',
-        value: '${DemoMetrics.feelsLikeC.round()}°',
-        sub: 'Humid',
-      ),
-      (
-        icon: Icons.wb_sunny_outlined,
-        label: 'UV index',
-        value: DemoMetrics.uvIndex.round().toString(),
-        sub: DemoMetrics.uvLabel,
-      ),
+    final tiles = <({IconData icon, String label, String value, String? sub})>[
+      if (weather.apparentTemperatureC != null)
+        (
+          icon: Icons.thermostat,
+          label: 'Feels like',
+          value: '${weather.apparentTemperatureC!.round()}°',
+          sub: null,
+        ),
+      if (uvIndexMax != null)
+        (
+          icon: Icons.wb_sunny_outlined,
+          label: 'UV index',
+          value: uvIndexMax!.round().toString(),
+          sub: _uvBand(uvIndexMax!),
+        ),
       (
         icon: Icons.water_drop_outlined,
         label: 'Humidity',
         value: '${weather.humidityPct.round()}%',
-        sub: 'Dew pt ${DemoMetrics.dewPointC.round()}°',
+        sub: weather.dewPointC == null
+            ? null
+            : 'Dew pt ${weather.dewPointC!.round()}°',
       ),
       (
         icon: Icons.air,
@@ -159,19 +200,30 @@ class DetailGrid extends StatelessWidget {
         value: '${weather.windSpeedKmh.round()} km/h',
         sub: windDirectionLabel(weather.windDirectionDeg),
       ),
-      (
-        icon: Icons.speed,
-        label: 'Pressure',
-        value: '${DemoMetrics.pressureHpa.round()}',
-        sub: 'hPa',
-      ),
-      (
-        icon: Icons.visibility_outlined,
-        label: 'Visibility',
-        value: '${DemoMetrics.visibilityKm.toStringAsFixed(1)} km',
-        sub: 'Reduced',
-      ),
+      if (weather.pressureHpa != null)
+        (
+          icon: Icons.speed,
+          label: 'Pressure',
+          value: weather.pressureHpa!.round().toString(),
+          sub: 'hPa',
+        ),
+      if (weather.visibilityKm != null)
+        (
+          icon: Icons.visibility_outlined,
+          label: 'Visibility',
+          value: '${weather.visibilityKm!.toStringAsFixed(1)} km',
+          sub: null,
+        ),
+      if (airQuality?.pm25 != null)
+        (
+          icon: Icons.blur_on,
+          label: 'PM2.5',
+          value: airQuality!.pm25!.round().toString(),
+          sub: 'µg/m³',
+        ),
     ];
+
+    if (tiles.isEmpty) return const SizedBox.shrink();
 
     return GridView.count(
       crossAxisCount: 2,
@@ -203,7 +255,10 @@ class DetailGrid extends StatelessWidget {
                   ],
                 ),
                 Text(tile.value, style: AppTypography.title(foreground)),
-                Text(tile.sub, style: AppTypography.caption(foreground)),
+                Text(
+                  tile.sub ?? '',
+                  style: AppTypography.caption(foreground),
+                ),
               ],
             ),
           ),
@@ -212,15 +267,34 @@ class DetailGrid extends StatelessWidget {
   }
 }
 
-/// Sunrise and sunset, with a simple arc showing where the sun sits
-/// between them.
+/// Sunrise and sunset for today. Renders nothing without both.
 class SunPanel extends StatelessWidget {
-  const SunPanel({super.key, required this.foreground});
+  const SunPanel({
+    super.key,
+    required this.foreground,
+    this.sunrise,
+    this.sunset,
+  });
 
+  /// Upstream ISO strings, formatted here for display.
+  final String? sunrise;
+  final String? sunset;
   final Color foreground;
+
+  static String? _clock(String? iso) {
+    if (iso == null) return null;
+    final t = DateTime.tryParse(iso);
+    if (t == null) return null;
+    return '${t.hour.toString().padLeft(2, '0')}:'
+        '${t.minute.toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final rise = _clock(sunrise);
+    final set = _clock(sunset);
+    if (rise == null || set == null) return const SizedBox.shrink();
+
     return GlassPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,13 +308,13 @@ class SunPanel extends StatelessWidget {
               _SunEnd(
                 icon: Icons.wb_twilight,
                 label: 'Sunrise',
-                time: DemoMetrics.sunrise,
+                time: rise,
                 foreground: foreground,
               ),
               _SunEnd(
                 icon: Icons.nightlight_outlined,
                 label: 'Sunset',
-                time: DemoMetrics.sunset,
+                time: set,
                 foreground: foreground,
                 alignEnd: true,
               ),
