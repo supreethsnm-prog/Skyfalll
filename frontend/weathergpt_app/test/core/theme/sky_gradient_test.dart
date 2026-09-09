@@ -12,6 +12,20 @@ double _ratio(Color a, Color b) {
   return (brighter + 0.05) / (darker + 0.05);
 }
 
+/// Composites [fill] (translucent) over the opaque [base], per channel:
+/// `fill.a * fill.channel + (1 - fill.a) * base.channel`. This is what a
+/// viewer actually sees when a [GlassPanel] sits over a sky stop — text
+/// inside the panel reads against THIS colour, not the bare sky.
+Color _compositeOver(Color fill, Color base) {
+  double mix(double f, double b) => fill.a * f + (1 - fill.a) * b;
+  return Color.from(
+    alpha: 1.0,
+    red: mix(fill.r, base.r),
+    green: mix(fill.g, base.g),
+    blue: mix(fill.b, base.b),
+  );
+}
+
 void main() {
   group('skyTimeOfDayFor', () {
     test('classifies the day into dawn/day/dusk/night', () {
@@ -135,6 +149,33 @@ void main() {
           for (final stop in skyGradient(time, condition).colors) {
             expect(_ratio(stop, fg), greaterThanOrEqualTo(4.5),
                 reason: '$time/$condition stop $stop vs $fg');
+          }
+        }
+      }
+    });
+
+    test(
+        'all 24 skies clear WCAG AA against their foreground THROUGH '
+        'GlassPanel', () {
+      // This is the test whose absence let the contrast bug ship: a prior
+      // pass verified only the bare sky and left ~0.4% headroom on the
+      // worst stops, which GlassPanel's white fill then consumed. Text
+      // inside a panel sits on the sky COMPOSITED with
+      // AppColors.glassFill, not on the bare sky, so that is what must be
+      // checked — and this must keep catching it if any future
+      // compositing layer does the same thing again (raise the fill,
+      // stack another translucent layer, etc.), which is why this
+      // composites explicitly here rather than trusting the bare-sky
+      // test above to generalise.
+      for (final time in SkyTimeOfDay.values) {
+        for (final condition in SkyCondition.values) {
+          final fg = skyForeground(time, condition);
+          for (final stop in skyGradient(time, condition).colors) {
+            final composited = _compositeOver(AppColors.glassFill, stop);
+            expect(_ratio(composited, fg), greaterThanOrEqualTo(4.5),
+                reason:
+                    '$time/$condition stop $stop composited with glassFill '
+                    '-> $composited vs $fg');
           }
         }
       }

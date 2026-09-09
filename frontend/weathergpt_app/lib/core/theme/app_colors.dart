@@ -39,6 +39,14 @@ class AppColors {
   /// anti-aliased edge pixels were recoverable from the reference.
   static const destructive = Color(0xFFEF4444);
 
+  /// Fill for [GlassPanel]. The reference's panels sample only 2-4% lighter
+  /// than the sky behind them (spec §2.2), so this is deliberately far below
+  /// an "opaque card" alpha. It is also load-bearing for contrast: text
+  /// inside a panel sits on this composited over the sky, not on the sky, so
+  /// raising it pushes the darker skies below WCAG AA. See
+  /// sky_gradient.dart's AA note before changing it.
+  static const Color glassFill = Color(0x08FFFFFF);
+
   // Alert severity scale, carried over unchanged — keyed to the CAP
   // levels the backend's SACHET-sourced alerts use.
   static const _severityMinor = Color(0xFFF3D9AE);

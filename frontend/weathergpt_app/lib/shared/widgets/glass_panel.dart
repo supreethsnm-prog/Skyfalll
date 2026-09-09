@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
 import '../../core/theme/app_spacing.dart';
 
@@ -15,10 +16,6 @@ class GlassPanel extends StatelessWidget {
   final Widget child;
   final EdgeInsets? padding;
 
-  /// ~12% white, matching the reference's subtlety. Deliberately far
-  /// below an "opaque card" alpha — see spec §2.2.
-  static const _fillColor = Color(0x1FFFFFFF);
-
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
@@ -28,7 +25,7 @@ class GlassPanel extends StatelessWidget {
         child: Container(
           padding: padding ?? const EdgeInsets.all(AppSpacing.lg),
           decoration: BoxDecoration(
-            color: _fillColor,
+            color: AppColors.glassFill,
             borderRadius: BorderRadius.circular(AppRadius.panel),
           ),
           child: child,
