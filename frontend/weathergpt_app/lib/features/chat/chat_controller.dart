@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/app_error.dart';
 import '../../data/chat_api.dart';
+import 'conversation_store.dart';
 
 sealed class ChatUiState {
   final List<ChatTurn> messages;
@@ -34,6 +35,47 @@ final chatApiProvider = Provider<ChatApi>((ref) => ChatApi(buildApiClient()));
 final chatControllerProvider =
     NotifierProvider<ChatController, ChatUiState>(ChatController.new);
 
+/// Saved conversations, newest first. Backs the sidebar's Recents list.
+final conversationsProvider =
+    NotifierProvider<ConversationsController, List<Conversation>>(
+  ConversationsController.new,
+);
+
+class ConversationsController extends Notifier<List<Conversation>> {
+  /// Mutations await this, for the same reason saved places do: a message
+  /// sent before storage answers would otherwise be written into an empty
+  /// list and the in-flight restore would then wipe it.
+  late final Future<void> _restored;
+
+  @override
+  List<Conversation> build() {
+    _restored = _restore();
+    return const [];
+  }
+
+  Future<void> _restore() async {
+    state = await ref.read(conversationStoreProvider).load();
+  }
+
+  /// Inserts or updates one conversation, newest first.
+  Future<void> upsert(Conversation conversation) async {
+    await _restored;
+    final next = [
+      conversation,
+      ...state.where((c) => c.id != conversation.id),
+    ];
+    state = next;
+    await ref.read(conversationStoreProvider).save(next);
+  }
+
+  Future<void> remove(String id) async {
+    await _restored;
+    final next = state.where((c) => c.id != id).toList();
+    state = next;
+    await ref.read(conversationStoreProvider).save(next);
+  }
+}
+
 /// The chat endpoint (`POST /chat`) is a single request/response call,
 /// not a token stream. This controller's job is state management around
 /// that one call — any "typing"/"streaming" feel is a UI-layer concern
@@ -44,10 +86,47 @@ class ChatController extends Notifier<ChatUiState> {
   /// reconstructed — and sent back verbatim on the next request.
   List<dynamic>? _rawHistory;
 
+  /// Identifies the conversation being persisted. Assigned on the first
+  /// message so that every later turn updates the same saved record
+  /// rather than piling up a new one per message.
+  String? _conversationId;
+
   @override
   ChatUiState build() {
     _rawHistory = null;
+    _conversationId = null;
     return const ChatIdle([]);
+  }
+
+  /// Clears the screen for a new conversation. The previous one is
+  /// already saved, so this only drops the in-memory pointer to it.
+  void startNew() {
+    _rawHistory = null;
+    _conversationId = null;
+    state = const ChatIdle([]);
+  }
+
+  /// Reopens a saved conversation, restoring the backend history verbatim
+  /// so the next turn continues it rather than starting over.
+  void resume(Conversation conversation) {
+    _conversationId = conversation.id;
+    _rawHistory = conversation.rawHistory;
+    state = ChatIdle(conversation.messages);
+  }
+
+  Future<void> _persist(List<ChatTurn> messages) async {
+    if (messages.isEmpty) return;
+    final id = _conversationId ??=
+        DateTime.now().microsecondsSinceEpoch.toString();
+
+    await ref.read(conversationsProvider.notifier).upsert(
+          Conversation(
+            id: id,
+            messages: messages,
+            rawHistory: _rawHistory,
+            updatedAt: DateTime.now(),
+          ),
+        );
   }
 
   Future<void> sendMessage(String text) async {
@@ -67,6 +146,10 @@ class ChatController extends Notifier<ChatUiState> {
           .whereType<ChatTurn>()
           .toList();
       state = ChatIdle(displayed);
+      // Saved only after a successful turn: persisting a failed send
+      // would leave a conversation whose stored history the backend
+      // never actually acknowledged.
+      await _persist(displayed);
     } on AppError catch (e) {
       state = ChatFailed(optimisticMessages, text, historyForThisRequest, e);
     }

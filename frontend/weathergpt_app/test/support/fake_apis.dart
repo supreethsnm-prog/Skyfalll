@@ -6,6 +6,7 @@ import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/alerts_socket.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
+import 'package:weathergpt_app/features/chat/conversation_store.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
 import 'package:weathergpt_app/features/saved/saved_places_controller.dart';
 
@@ -138,6 +139,20 @@ class FakeSavedPlacesStore implements SavedPlacesStore {
   Future<void> save(List<GeocodeResult> next) async => places = next;
 }
 
+/// In-memory chat history, so the drawer's Recents list does not reach
+/// for shared_preferences in a widget test.
+class FakeConversationStore implements ConversationStore {
+  FakeConversationStore([this.conversations = const []]);
+
+  List<Conversation> conversations;
+
+  @override
+  Future<List<Conversation>> load() async => conversations;
+
+  @override
+  Future<void> save(List<Conversation> next) async => conversations = next;
+}
+
 /// Drop-in overrides for any `ProviderScope` mounting `HomeScreen`.
 ///
 /// The return type is inferred rather than written out: Riverpod 3 does
@@ -151,4 +166,5 @@ final fakeApiOverrides = [
   geocodingApiProvider.overrideWithValue(const FakeGeocodingApi()),
   alertsSocketProvider.overrideWithValue(FakeAlertsSocket()),
   savedPlacesStoreProvider.overrideWithValue(FakeSavedPlacesStore()),
+  conversationStoreProvider.overrideWithValue(FakeConversationStore()),
 ];

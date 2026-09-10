@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/network/app_error.dart';
 import 'package:weathergpt_app/data/chat_api.dart';
 import 'package:weathergpt_app/features/chat/chat_controller.dart';
+import 'package:weathergpt_app/features/chat/conversation_store.dart';
 
 /// Implements only the public interface ChatApi exposes — its private
 /// Dio field is not part of that interface, so no real Dio is needed.
@@ -21,6 +22,14 @@ class FakeChatApi implements ChatApi {
   }
 }
 
+class _NoStore implements ConversationStore {
+  @override
+  Future<List<Conversation>> load() async => const [];
+
+  @override
+  Future<void> save(List<Conversation> next) async {}
+}
+
 void main() {
   late FakeChatApi fakeApi;
   late ProviderContainer container;
@@ -28,7 +37,13 @@ void main() {
   setUp(() {
     fakeApi = FakeChatApi();
     container = ProviderContainer(
-      overrides: [chatApiProvider.overrideWithValue(fakeApi)],
+      overrides: [
+        chatApiProvider.overrideWithValue(fakeApi),
+        // A completed turn is now persisted; without this the controller
+        // reaches for shared_preferences, which has no implementation in
+        // a plain Dart test.
+        conversationStoreProvider.overrideWithValue(_NoStore()),
+      ],
     );
   });
 

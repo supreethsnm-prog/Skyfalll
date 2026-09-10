@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/theme/app_theme.dart';
 import 'package:weathergpt_app/data/chat_api.dart';
 import 'package:weathergpt_app/features/chat/chat_controller.dart';
+import 'package:weathergpt_app/features/chat/conversation_store.dart';
 import 'package:weathergpt_app/features/chat/chat_screen.dart';
 import 'package:weathergpt_app/features/shell/app_drawer.dart';
 
@@ -42,6 +43,16 @@ void _sizeView(WidgetTester tester) {
 
 /// A chat API that never returns, so the screen can be pumped with a
 /// pre-seeded transcript without a live backend.
+/// No stored history, so the drawer and chat screen never reach for the
+/// shared_preferences plugin, which has no widget-test implementation.
+class _EmptyConversationStore implements ConversationStore {
+  @override
+  Future<List<Conversation>> load() async => const [];
+
+  @override
+  Future<void> save(List<Conversation> next) async {}
+}
+
 class _InertChatApi implements ChatApi {
   @override
   Future<ChatResult> sendMessage(String message, List<dynamic>? history) {
@@ -49,8 +60,7 @@ class _InertChatApi implements ChatApi {
   }
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      super.noSuchMethod(invocation);
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 /// Returns one canned assistant reply, so a populated transcript can be
@@ -76,8 +86,7 @@ class _ReplyingChatApi implements ChatApi {
   }
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      super.noSuchMethod(invocation);
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
@@ -93,10 +102,17 @@ void main() {
     _sizeView(tester);
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.dark,
-        debugShowCheckedModeBanner: false,
-        home: const Scaffold(drawer: AppDrawer(), body: SizedBox.expand()),
+      ProviderScope(
+        overrides: [
+          conversationStoreProvider.overrideWithValue(
+            _EmptyConversationStore(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          debugShowCheckedModeBanner: false,
+          home: const Scaffold(drawer: AppDrawer(), body: SizedBox.expand()),
+        ),
       ),
     );
     tester.state<ScaffoldState>(find.byType(Scaffold)).openDrawer();
@@ -112,17 +128,27 @@ void main() {
     _sizeView(tester);
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.dark,
-        debugShowCheckedModeBanner: false,
-        home: const Scaffold(
-          drawer: AppDrawer(activeRoute: '/chat', recents: [
-            'Rain forecast for Pune this week',
-            'Cyclone risk on the Odisha coast',
-            'Is it safe to sow now?',
-            'Air quality in Delhi tomorrow',
-          ]),
-          body: SizedBox.expand(),
+      ProviderScope(
+        overrides: [
+          conversationStoreProvider.overrideWithValue(
+            _EmptyConversationStore(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          debugShowCheckedModeBanner: false,
+          home: const Scaffold(
+            drawer: AppDrawer(
+              activeRoute: '/chat',
+              recents: [
+                'Rain forecast for Pune this week',
+                'Cyclone risk on the Odisha coast',
+                'Is it safe to sow now?',
+                'Air quality in Delhi tomorrow',
+              ],
+            ),
+            body: SizedBox.expand(),
+          ),
         ),
       ),
     );
@@ -140,7 +166,12 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [chatApiProvider.overrideWithValue(_InertChatApi())],
+        overrides: [
+          chatApiProvider.overrideWithValue(_InertChatApi()),
+          conversationStoreProvider.overrideWithValue(
+            _EmptyConversationStore(),
+          ),
+        ],
         child: MaterialApp(
           theme: AppTheme.dark,
           debugShowCheckedModeBanner: false,
@@ -161,7 +192,12 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [chatApiProvider.overrideWithValue(_ReplyingChatApi())],
+        overrides: [
+          chatApiProvider.overrideWithValue(_ReplyingChatApi()),
+          conversationStoreProvider.overrideWithValue(
+            _EmptyConversationStore(),
+          ),
+        ],
         child: MaterialApp(
           theme: AppTheme.dark,
           debugShowCheckedModeBanner: false,

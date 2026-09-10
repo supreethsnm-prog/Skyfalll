@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -6,6 +7,7 @@ import '../../core/theme/app_radius.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../shared/widgets/round_icon_button.dart';
+import '../chat/chat_controller.dart';
 
 /// The app's sidebar, modelled on ChatGPT's (`TopLeftLines.jpeg`): the
 /// wordmark top-left, a search affordance top-right, a short list of
@@ -15,10 +17,10 @@ import '../../shared/widgets/round_icon_button.dart';
 /// Sits on [AppColors.bgBase] like the rest of the chrome — the drawer is
 /// not a raised surface in the reference, it is the same true black with
 /// the content simply sliding over it.
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends ConsumerWidget {
   const AppDrawer({
     super.key,
-    this.recents = const [],
+    this.recents,
     this.activeRoute = '/home',
   });
 
@@ -26,13 +28,15 @@ class AppDrawer extends StatelessWidget {
   /// the reference sidebar always shows where you are.
   final String activeRoute;
 
-  /// Previous conversation titles. Nothing persists chat history yet, so
-  /// this is normally empty and the section shows an honest empty state
-  /// rather than invented conversations.
-  final List<String> recents;
+  /// Overrides the saved conversation list. Used by goldens and tests so
+  /// they do not depend on stored history; null means read the real one.
+  final List<String>? recents;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final conversations = ref.watch(conversationsProvider);
+    final titles =
+        recents ?? conversations.map((c) => c.title).toList(growable: false);
     return Drawer(
       backgroundColor: AppColors.bgBase,
       // The reference drawer is a plain panel, not an elevated Material
@@ -63,6 +67,8 @@ class AppDrawer extends StatelessWidget {
                     selected: activeRoute == '/chat',
                     onTap: () {
                       Navigator.of(context).pop();
+                      // A fresh chat, not whatever was last open.
+                      ref.read(chatControllerProvider.notifier).startNew();
                       context.go('/chat');
                     },
                   ),
@@ -91,14 +97,25 @@ class AppDrawer extends StatelessWidget {
                     },
                   ),
                   const _SectionLabel('Recents'),
-                  if (recents.isEmpty)
+                  if (titles.isEmpty)
                     const _EmptyRecents()
                   else
-                    for (final title in recents)
+                    for (var i = 0; i < titles.length; i++)
                       _NavEntry(
                         icon: Icons.chat_bubble_outline,
-                        label: title,
-                        onTap: () {},
+                        label: titles[i],
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          // Only a real saved conversation can be
+                          // reopened; an injected title list is display
+                          // only.
+                          if (recents == null && i < conversations.length) {
+                            ref
+                                .read(chatControllerProvider.notifier)
+                                .resume(conversations[i]);
+                          }
+                          context.go('/chat');
+                        },
                       ),
                 ],
               ),
