@@ -24,7 +24,12 @@ import 'flight_category.dart';
 /// already owns "where is the user", and a second, independently-resolved
 /// location here could disagree with it.
 class AviationScreen extends ConsumerStatefulWidget {
-  const AviationScreen({super.key});
+  const AviationScreen({super.key, this.now});
+
+  /// Injectable clock. The observation's AGE is shown ("20 min ago"), so
+  /// without this a golden would render differently every hour. Same
+  /// pattern as `HomeScreen` and `SavedPlacesScreen`.
+  final DateTime? now;
 
   @override
   ConsumerState<AviationScreen> createState() => _AviationScreenState();
@@ -123,6 +128,7 @@ class _AviationScreenState extends ConsumerState<AviationScreen> {
                 homeState: homeState,
                 aviationState: aviationState,
                 onSelectAirport: _selectAirport,
+                now: widget.now,
               ),
             ),
           ],
@@ -137,7 +143,11 @@ class _Body extends ConsumerWidget {
     required this.homeState,
     required this.aviationState,
     required this.onSelectAirport,
+    this.now,
   });
+
+  /// Injectable clock, threaded down to the observation-age label.
+  final DateTime? now;
 
   final HomeUiState homeState;
   final AviationUiState aviationState;
@@ -181,6 +191,7 @@ class _Body extends ConsumerWidget {
           ),
         ),
       AviationLoaded() => _LoadedView(
+          now: now,
           state: aviationState as AviationLoaded,
           onSelectAirport: onSelectAirport,
         ),
@@ -263,7 +274,13 @@ class _AirportHeader extends StatelessWidget {
 }
 
 class _LoadedView extends ConsumerWidget {
-  const _LoadedView({required this.state, required this.onSelectAirport});
+  const _LoadedView({
+    required this.state,
+    required this.onSelectAirport,
+    this.now,
+  });
+
+  final DateTime? now;
 
   final AviationLoaded state;
   final ValueChanged<Airport> onSelectAirport;
@@ -295,6 +312,11 @@ class _LoadedView extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.xl),
             _CategoryBanner(category: reading.flightCategory),
+            const SizedBox(height: AppSpacing.sm),
+            _ObservedAt(
+              observedAtUtc: reading.observedAt,
+              now: now,
+            ),
             const SizedBox(height: AppSpacing.lg),
             _StatsGrid(reading: reading),
             const SizedBox(height: AppSpacing.xl),
@@ -355,6 +377,45 @@ class _CategoryBanner extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// When the observation was taken.
+///
+/// A METAR is a point-in-time measurement, not a forecast, and its AGE is
+/// operationally meaningful — a report from twenty minutes ago and one
+/// from three hours ago support very different decisions. The raw report
+/// carries the timestamp as "100230Z", which is unreadable to anyone who
+/// is not a pilot, so it is shown in plain local time as well.
+class _ObservedAt extends StatelessWidget {
+  const _ObservedAt({required this.observedAtUtc, this.now});
+
+  final String observedAtUtc;
+  final DateTime? now;
+
+  @override
+  Widget build(BuildContext context) {
+    final parsed = DateTime.tryParse(observedAtUtc);
+    // An unparseable timestamp is dropped rather than shown raw: a
+    // half-rendered ISO string looks like a bug, and the raw report block
+    // below still carries the real value.
+    if (parsed == null) return const SizedBox.shrink();
+
+    final local = parsed.toLocal();
+    final age = (now ?? DateTime.now()).difference(local);
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+
+    final ageText = age.isNegative
+        ? ''
+        : age.inMinutes < 60
+            ? ' · ${age.inMinutes} min ago'
+            : ' · ${age.inHours} h ago';
+
+    return Text(
+      'Observed $hh:$mm$ageText',
+      style: AppTypography.caption(AppColors.textSecondary),
     );
   }
 }
