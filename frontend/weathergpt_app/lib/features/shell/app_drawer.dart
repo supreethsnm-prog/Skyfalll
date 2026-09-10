@@ -73,6 +73,15 @@ class AppDrawer extends ConsumerWidget {
                     },
                   ),
                   _NavEntry(
+                    icon: Icons.agriculture_outlined,
+                    label: 'Advisories',
+                    selected: activeRoute == '/advisories',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      context.go('/advisories');
+                    },
+                  ),
+                  _NavEntry(
                     icon: Icons.explore_outlined,
                     label: 'Discover',
                     onTap: () {},

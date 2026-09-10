@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/router/app_router.dart';
+import 'package:weathergpt_app/features/advisory/advisory_screen.dart';
 import 'package:weathergpt_app/features/chat/chat_screen.dart';
 import 'package:weathergpt_app/features/gallery/gallery_screen.dart';
 import 'package:weathergpt_app/features/home/home_screen.dart';
@@ -70,5 +71,18 @@ void main() {
 
     expect(find.byType(GalleryScreen), findsOneWidget);
     expect(find.text('Gallery — coming soon'), findsNothing);
+  });
+
+  testWidgets('navigating to /advisories shows the advisory screen',
+      (tester) async {
+    // Home loads first (pumpApp lands on /home and settles), so by the
+    // time this navigates, homeControllerProvider already has a location
+    // for Advisories to read.
+    await pumpApp(tester);
+
+    appRouter.go('/advisories');
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AdvisoryScreen), findsOneWidget);
   });
 }

@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:weathergpt_app/core/location/device_location.dart';
+import 'package:weathergpt_app/data/advisory_api.dart';
 import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/alerts_socket.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
+import 'package:weathergpt_app/features/advisory/advisory_controller.dart';
 import 'package:weathergpt_app/features/chat/conversation_store.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
 import 'package:weathergpt_app/features/saved/saved_places_controller.dart';
@@ -69,6 +71,52 @@ class FakeAirQualityApi implements AirQualityApi {
 class FakeAlertsApi implements AlertsApi {
   @override
   Future<List<AlertSummary>> fetchAlerts() async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
+
+/// Stands in for `AdvisoryApi`, so any test that mounts `AdvisoryScreen`
+/// (or a route tree that could reach it) does not make a live HTTP call.
+/// Both responses default to "everything normal, nothing to report" —
+/// LOW risk and no advisory text — which is itself a realistic, common
+/// outcome for this endpoint, not a placeholder to gloss over.
+class FakeAdvisoryApi implements AdvisoryApi {
+  @override
+  Future<AgricultureAdvisory> fetchAgriculture(
+    double lat,
+    double lon, {
+    String? crop,
+    int days = 5,
+  }) async {
+    return AgricultureAdvisory(
+      latitude: lat,
+      longitude: lon,
+      crop: crop,
+      generatedAt: '2026-09-09T14:00',
+      advisories: const [],
+      activeAlerts: const [],
+      forecastBasis: const [],
+    );
+  }
+
+  @override
+  Future<UrbanAdvisory> fetchUrban(double lat, double lon, {int days = 5}) async {
+    return UrbanAdvisory(
+      latitude: lat,
+      longitude: lon,
+      generatedAt: '2026-09-09T14:00',
+      riskSummary: const UrbanRiskSummary(
+        waterloggingRisk: 'LOW',
+        heatRisk: 'LOW',
+        windRisk: 'LOW',
+      ),
+      advisories: const [],
+      activeAlerts: const [],
+      forecastBasis: const [],
+    );
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>
@@ -162,6 +210,7 @@ final fakeApiOverrides = [
   weatherApiProvider.overrideWithValue(FakeWeatherApi()),
   alertsApiProvider.overrideWithValue(FakeAlertsApi()),
   airQualityApiProvider.overrideWithValue(FakeAirQualityApi()),
+  advisoryApiProvider.overrideWithValue(FakeAdvisoryApi()),
   deviceLocationProvider.overrideWithValue(const FakeDeviceLocation()),
   geocodingApiProvider.overrideWithValue(const FakeGeocodingApi()),
   alertsSocketProvider.overrideWithValue(FakeAlertsSocket()),

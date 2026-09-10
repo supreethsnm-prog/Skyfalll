@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 
+import '../../features/advisory/advisory_screen.dart';
 import '../../features/chat/chat_screen.dart';
 import '../../features/gallery/gallery_screen.dart';
 import '../../features/home/home_screen.dart';
@@ -29,6 +30,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/saved',
       builder: (context, state) => const SavedPlacesScreen(),
+    ),
+    GoRoute(
+      path: '/advisories',
+      builder: (context, state) => const AdvisoryScreen(),
     ),
     GoRoute(
       path: '/gallery',
