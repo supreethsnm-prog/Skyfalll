@@ -7,11 +7,11 @@ void main() {
   runApp(const ProviderScope(child: WeatherGptApp()));
 }
 
-class WeatherGptApp extends ConsumerWidget {
+class WeatherGptApp extends StatelessWidget {
   const WeatherGptApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'WeatherGPT',
       theme: AppTheme.dark,

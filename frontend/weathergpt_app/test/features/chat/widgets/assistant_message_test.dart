@@ -10,11 +10,38 @@ void main() {
 
     expect(find.text('It is sunny.'), findsOneWidget);
 
+    // Filtering only `Container` left the guard porous: a DecoratedBox,
+    // a Card, or a coloured Material would each box the message and sail
+    // straight past. This is the single most load-bearing design
+    // decision in the app — the asymmetry against UserBubble — so the
+    // check covers every mechanism that can paint a box.
     final decoratedContainers = tester
         .widgetList<Container>(find.byType(Container))
         .where((c) => c.decoration != null);
     expect(decoratedContainers, isEmpty,
         reason: 'assistant turns are flat prose, never boxed');
+
+    // Scoped to the widget's own subtree: the Scaffold above it legitimately
+    // paints the page background, and matching that would be a false alarm.
+    Finder inside(Finder matching) => find.descendant(
+          of: find.byType(AssistantMessage),
+          matching: matching,
+        );
+
+    expect(inside(find.byType(DecoratedBox)), findsNothing,
+        reason: 'a DecoratedBox boxes the message just as a Container does');
+    expect(inside(find.byType(Card)), findsNothing, reason: 'a Card is a box');
+    expect(inside(find.byType(ColoredBox)), findsNothing,
+        reason: 'a ColoredBox paints a surface too');
+
+    final paintedMaterials = tester
+        .widgetList<Material>(inside(find.byType(Material)))
+        .where((m) =>
+            m.color != null &&
+            m.color != Colors.transparent &&
+            m.color!.a > 0);
+    expect(paintedMaterials, isEmpty,
+        reason: 'a Material with a colour paints a surface behind the prose');
   });
 
   testWidgets('shows the action row and fires each callback', (tester) async {

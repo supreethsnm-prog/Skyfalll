@@ -1,9 +1,22 @@
 import 'package:flutter/material.dart';
 
-/// Colours sampled directly from the reference screenshots in
-/// backend/FrontendReference/ — see
-/// docs/superpowers/specs/2026-09-09-flutter-design-literal.md §2.
-/// These are measured values, not design choices; do not "improve" them.
+/// The app's palette.
+///
+/// **Most** of these were sampled pixel-by-pixel from the reference
+/// screenshots in backend/FrontendReference/ — see
+/// docs/superpowers/specs/2026-09-09-flutter-design-literal.md §2 — and
+/// each of those is marked `Sampled`. Do not "improve" a sampled value;
+/// re-sample it.
+///
+/// Several are NOT sampled and are marked `Chosen`: [destructive] (only
+/// anti-aliased edges were measurable in the reference), the alert
+/// severity ramp (no reference shows it at all), and [glassFill] (a
+/// contrast-constrained value — see the AA note in sky_gradient.dart
+/// before changing it).
+///
+/// The header used to claim every value here was measured, which was
+/// simply untrue and would have misled anyone trying to trace one back
+/// to a screenshot.
 class AppColors {
   AppColors._();
 
