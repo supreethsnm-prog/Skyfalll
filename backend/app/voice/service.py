@@ -14,6 +14,35 @@ from app.providers.bhashini import BhashiniSpeechProvider
 from app.providers.speech import SpeechToTextProvider, TextToSpeechProvider
 
 
+def synthesize_speech(
+    text: str,
+    language: str,
+    provider: TextToSpeechProvider | None = None,
+) -> dict:
+    """Text-to-speech for arbitrary already-existing text — the "read
+    aloud" action on a chat message, distinct from [voice_chat] below.
+
+    [voice_chat] always synthesizes as the LAST step of a fresh STT ->
+    chat_turn -> TTS round trip; there was previously no way to synthesize
+    text that already exists (an assistant reply already on screen)
+    without re-running the whole pipeline. This is a thin, standalone
+    wrapper for exactly that — never cached, per BhashiniSpeechProvider's
+    own module docstring (a synthesis result is specific to one utterance).
+    """
+    if not text or not text.strip():
+        raise ValueError("text must be a non-empty string")
+    if not language or not language.strip():
+        raise ValueError("language is required")
+    owns = provider is None
+    tts = provider or BhashiniSpeechProvider()
+    try:
+        result = tts.synthesize(text=text, language=language)
+        return {"audio_base64": result.audio_base64, "audio_format": result.audio_format}
+    finally:
+        if owns and hasattr(tts, "close"):
+            tts.close()
+
+
 def voice_chat(
     audio_base64: str,
     audio_format: str,

@@ -52,7 +52,7 @@ from app.translation.service import translate_text
 from app.scheduler import IngestionScheduler
 from app.skills.agriculture import get_agriculture_advisory
 from app.skills.urban import get_urban_advisory
-from app.voice.service import voice_chat
+from app.voice.service import synthesize_speech, voice_chat
 from app.warning import service as warning_service
 from app.weather.service import get_weather
 
@@ -491,6 +491,33 @@ def get_tts_provider() -> Generator[TextToSpeechProvider, None, None]:
         yield provider
     finally:
         provider.close()
+
+
+@app.get("/voice/synthesize")
+def voice_synthesize_endpoint(
+    text: str = Query(..., min_length=1, max_length=2000),
+    language: str = Query(..., min_length=2, max_length=10),
+    tts: TextToSpeechProvider = Depends(get_tts_provider),
+) -> dict:
+    """Text-to-speech for text that already exists — the "read aloud"
+    action on an already-displayed chat message. Distinct from
+    `/voice/chat`, which always synthesizes as the tail end of a fresh
+    STT -> chat_turn -> TTS round trip; this lets the client synthesize
+    the SAME reply text again without re-running the whole pipeline (and
+    without a second LLM call).
+    """
+    try:
+        return synthesize_speech(text=text, language=language, provider=tts)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except (KeyError, IndexError) as e:
+        raise HTTPException(
+            status_code=502, detail="The speech provider returned an invalid response. Please try again."
+        ) from e
+    except (httpx.HTTPStatusError, httpx.TransportError) as e:
+        raise HTTPException(
+            status_code=503, detail="The speech provider is temporarily unavailable. Please try again shortly."
+        ) from e
 
 
 # 10 MB — generous headroom for a 16kHz mono 16-bit WAV of several minutes
