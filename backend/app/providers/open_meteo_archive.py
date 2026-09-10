@@ -60,10 +60,35 @@ def _daily_at(daily: dict, field: str, index: int):
 
 
 class OpenMeteoArchiveProvider:
+    """A reusable archive client.
+
+    Deliberately NOT the close-inside-`finally` shape the other providers
+    in this package use. Those are called once per request; this one is
+    called twice — the requested day and the same day a year earlier — and
+    closing after the first call made the second raise "Cannot send a
+    request, as the client has been closed", surfacing as a bare 500.
+
+    Nothing caught that, because every test injects its own client and so
+    never exercises the owned-client path. Ownership now ends at `close()`
+    or the context manager, never mid-use.
+    """
+
     def __init__(self, base_url: str = ARCHIVE_BASE_URL, client: httpx.Client | None = None):
         self._base_url = base_url
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=10.0)
+
+    def close(self) -> None:
+        """Close the client if this provider created it. Injected clients
+        belong to the caller and are left alone."""
+        if self._owns_client:
+            self._client.close()
+
+    def __enter__(self) -> "OpenMeteoArchiveProvider":
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()
 
     def fetch_day(self, latitude: float, longitude: float, date_str: str) -> ArchiveDayData | None:
         """One day's archive reading for (latitude, longitude, date_str).
@@ -72,47 +97,47 @@ class OpenMeteoArchiveProvider:
         (e.g. a date outside the archive's coverage) rather than raising —
         callers should still handle exceptions defensively for genuine
         request failures.
+
+        Does NOT close the client — a provider is called twice per request
+        (see the class docstring) and must stay usable across both calls.
+        Call `close()` (or use this as a context manager) when done.
         """
+        response = self._client.get(
+            self._base_url,
+            params={
+                "latitude": latitude,
+                "longitude": longitude,
+                "start_date": date_str,
+                "end_date": date_str,
+                "daily": _DAILY_FIELDS,
+                "timezone": "auto",
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
         try:
-            response = self._client.get(
-                self._base_url,
-                params={
-                    "latitude": latitude,
-                    "longitude": longitude,
-                    "start_date": date_str,
-                    "end_date": date_str,
-                    "daily": _DAILY_FIELDS,
-                    "timezone": "auto",
-                },
+            daily = payload["daily"]
+            times = daily.get("time")
+            if not times:
+                return None
+            index = 0
+            return ArchiveDayData(
+                date=times[index],
+                temp_max_c=_daily_at(daily, "temperature_2m_max", index),
+                temp_min_c=_daily_at(daily, "temperature_2m_min", index),
+                temp_mean_c=_daily_at(daily, "temperature_2m_mean", index),
+                precip_sum_mm=_daily_at(daily, "precipitation_sum", index),
+                wind_speed_max_kmh=_daily_at(daily, "windspeed_10m_max", index),
+                wind_direction_dominant_deg=_daily_at(
+                    daily, "winddirection_10m_dominant", index
+                ),
             )
-            response.raise_for_status()
-            payload = response.json()
-            try:
-                daily = payload["daily"]
-                times = daily.get("time")
-                if not times:
-                    return None
-                index = 0
-                return ArchiveDayData(
-                    date=times[index],
-                    temp_max_c=_daily_at(daily, "temperature_2m_max", index),
-                    temp_min_c=_daily_at(daily, "temperature_2m_min", index),
-                    temp_mean_c=_daily_at(daily, "temperature_2m_mean", index),
-                    precip_sum_mm=_daily_at(daily, "precipitation_sum", index),
-                    wind_speed_max_kmh=_daily_at(daily, "windspeed_10m_max", index),
-                    wind_direction_dominant_deg=_daily_at(
-                        daily, "winddirection_10m_dominant", index
-                    ),
-                )
-            except (KeyError, TypeError) as exc:
-                logger.warning(
-                    "Failed to parse Open-Meteo archive response for (%s, %s, %s): %s",
-                    latitude,
-                    longitude,
-                    date_str,
-                    exc,
-                )
-                raise
-        finally:
-            if self._owns_client:
-                self._client.close()
+        except (KeyError, TypeError) as exc:
+            logger.warning(
+                "Failed to parse Open-Meteo archive response for (%s, %s, %s): %s",
+                latitude,
+                longitude,
+                date_str,
+                exc,
+            )
+            raise
