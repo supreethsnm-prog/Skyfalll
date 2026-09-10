@@ -1,9 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:weathergpt_app/core/network/app_error.dart';
+import 'package:weathergpt_app/core/theme/app_colors.dart';
 import 'package:weathergpt_app/data/marine_api.dart';
 import 'package:weathergpt_app/features/marine/marine_controller.dart';
 import 'package:weathergpt_app/features/marine/marine_screen.dart';
@@ -16,6 +19,17 @@ class _FakeTileProvider extends TileProvider {
   @override
   ImageProvider getImage(TileCoordinates coordinates, TileLayer options) =>
       MemoryImage(TileProvider.transparentImage);
+}
+
+/// A tile provider whose every tile fails to decode — bytes that are not a
+/// valid image. Simulates what a blocked tile host looks like from
+/// `TileLayer`'s point of view (the request "succeeds" onto garbage, or
+/// never resolves and eventually errors) without touching the network,
+/// which `flutter_test` blocks anyway.
+class _FailingTileProvider extends TileProvider {
+  @override
+  ImageProvider getImage(TileCoordinates coordinates, TileLayer options) =>
+      MemoryImage(Uint8List.fromList(const [0, 1, 2, 3]));
 }
 
 class _FakeMarineApi implements MarineApi {
@@ -182,6 +196,49 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.text("Couldn't load fishing zone advisories"), findsOneWidget);
+  });
+
+  testWidgets(
+      'the map has a deliberate app background colour, not flutter_map\'s '
+      'default grey', (tester) async {
+    await _pumpMarine(tester, marineApi: _FakeMarineApi(zones: const [_zoneA]));
+
+    final map = tester.widget<FlutterMap>(find.byType(FlutterMap));
+    expect(map.options.backgroundColor, AppColors.surfaceInset);
+  });
+
+  testWidgets(
+      'a tile load failure shows a non-blocking notice without hiding the '
+      'zones', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          marineApiProvider
+              .overrideWithValue(_FakeMarineApi(zones: const [_zoneA])),
+          marineTileProviderProvider.overrideWithValue(_FailingTileProvider()),
+        ],
+        child: const MaterialApp(home: MarineScreen()),
+      ),
+    );
+
+    // No pumpAndSettle: MarineLoading holds an indeterminate spinner. Fixed
+    // pumps give the failing tile image time to attempt decoding and
+    // report its error back through errorTileCallback.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(
+      find.text('Basemap unavailable — zones are still accurate.'),
+      findsOneWidget,
+    );
+    // The failure must not read as a total failure: the zone geometry is
+    // still drawn, unaffected by the tile layer underneath it.
+    final layer = tester.widget<PolylineLayer<PfzZone>>(
+      find.byType(PolylineLayer<PfzZone>),
+    );
+    expect(layer.polylines, isNotEmpty);
   });
 
   group('showZoneDetails bottom sheet', () {

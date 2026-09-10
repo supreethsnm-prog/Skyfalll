@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/geo.dart';
 import '../../core/location/device_location.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -335,6 +336,20 @@ class _LoadedView extends ConsumerWidget {
           const SizedBox(height: AppSpacing.md),
           AqiPill(airQuality: state.airQuality, foreground: foreground),
           const SizedBox(height: AppSpacing.xxl),
+          // Absence of alerts is only informative once the user knows
+          // whether this location is even in scope — our sources are
+          // Indian government feeds (see `_AlertCoverageNotice`), so
+          // "nothing nearby" outside India means "not covered", not "all
+          // clear". Inside India, silence already means all clear and a
+          // disclaimer here would be noise.
+          if (state.nearbyAlerts.isEmpty &&
+              !IndiaAlertCoverageBox.contains(
+                state.location.latitude,
+                state.location.longitude,
+              )) ...[
+            _AlertCoverageNotice(foreground: foreground),
+            const SizedBox(height: AppSpacing.md),
+          ],
           for (final alert in state.nearbyAlerts) ...[
             AlertBanner(alert: alert),
             const SizedBox(height: AppSpacing.md),
@@ -431,6 +446,37 @@ class _LocationNotice extends ConsumerWidget {
             minimumSize: const Size(0, 32),
           ),
           child: Text(action, style: AppTypography.caption(foreground)),
+        ),
+      ],
+    );
+  }
+}
+
+/// Shown in place of the (empty) alerts list when the current location is
+/// outside our alert sources' coverage — see `IndiaAlertCoverageBox`.
+///
+/// A user in Nepal seeing no alerts during a real flood there reasonably
+/// reads that as "the app missed it". It did not: our feeds
+/// (SACHET-IMD-NOWCAST, SACHET-SDMA) are Indian government sources and do
+/// not cover Nepal. A caption, not a warning — this is a coverage fact, not
+/// something wrong with the screen.
+class _AlertCoverageNotice extends StatelessWidget {
+  const _AlertCoverageNotice({required this.foreground});
+
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.info_outline, size: 16, color: foreground),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            'Alerts cover India only, sourced from IMD/SACHET.',
+            style: AppTypography.caption(foreground),
+          ),
         ),
       ],
     );
