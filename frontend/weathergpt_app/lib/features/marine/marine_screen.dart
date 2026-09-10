@@ -167,6 +167,19 @@ class _MapViewState extends ConsumerState<_MapView> {
     showZoneDetails(context, hit.hitValues.first);
   }
 
+  /// True once any OSM tile has failed to load — e.g. the tile host is
+  /// blocked on the current network. One-way for this screen's lifetime:
+  /// there is no corresponding "tile succeeded" signal in flutter_map's API
+  /// to clear it on, and a basemap that already failed once on this network
+  /// is unlikely to start working mid-session. The zone geometry never
+  /// depends on this — see `_TileFailureNotice`.
+  bool _tilesFailed = false;
+
+  void _onTileError(TileImage tile, Object error, StackTrace? stackTrace) {
+    if (_tilesFailed) return;
+    setState(() => _tilesFailed = true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final zones = widget.zones;
@@ -191,12 +204,25 @@ class _MapViewState extends ConsumerState<_MapView> {
                       bounds: LatLngBounds.fromPoints(points),
                       padding: const EdgeInsets.all(AppSpacing.xxl),
                     ),
+              // A deliberate colour rather than flutter_map's default light
+              // grey: when tiles fail to load (see below) the map behind
+              // the polylines is this colour, not an undressed placeholder
+              // that reads as broken.
+              backgroundColor: AppColors.surfaceInset,
             ),
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: _osmUserAgent,
                 tileProvider: tileProvider,
+                // The tile host is reachable from a dev machine but can be
+                // blocked on a real network (e.g. a filtered campus
+                // network) — verified on device. flutter_map has no retry
+                // or fallback source for this (and none is being added —
+                // see the brief), so the fix is only to detect the failure
+                // and say so; the zone polylines below do not depend on
+                // tiles and remain correct either way.
+                errorTileCallback: _onTileError,
               ),
               PolylineLayer<PfzZone>(
                 hitNotifier: _hitNotifier,
@@ -225,7 +251,17 @@ class _MapViewState extends ConsumerState<_MapView> {
           left: AppSpacing.lg,
           right: AppSpacing.lg,
           top: AppSpacing.lg,
-          child: _SummaryBar(zones: zones),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SummaryBar(zones: zones),
+              if (_tilesFailed) ...[
+                const SizedBox(height: AppSpacing.sm),
+                const _TileFailureNotice(),
+              ],
+            ],
+          ),
         ),
         // Legible over a blank tile background too: if OSM's tiles fail to
         // load the map goes blank, and this must not disappear with them.
@@ -277,6 +313,45 @@ class _SummaryBar extends StatelessWidget {
               style: AppTypography.caption(AppColors.textSecondary),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown over the map once any OSM tile has failed to load. Quiet and
+/// factual rather than alarming: the zone geometry drawn on top does not
+/// depend on the basemap and remains correct, so this must not read as a
+/// total failure of the screen.
+class _TileFailureNotice extends StatelessWidget {
+  const _TileFailureNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.panel),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.info_outline,
+            size: AppRadius.iconSize,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Flexible(
+            child: Text(
+              'Basemap unavailable — zones are still accurate.',
+              style: AppTypography.caption(AppColors.textSecondary),
+            ),
+          ),
         ],
       ),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
@@ -13,6 +14,7 @@ import '../../shared/error_message.dart';
 import '../../shared/widgets/glass_panel.dart';
 import '../../shared/widgets/round_icon_button.dart';
 import '../../shared/widgets/weather_icon.dart';
+import '../chat/chat_controller.dart';
 import '../home/home_controller.dart';
 import '../home/widgets/alert_banner.dart';
 import '../shell/app_drawer.dart';
@@ -500,30 +502,66 @@ class _AdvisoryRow extends StatelessWidget {
 
 /// `advisories` is very often empty, which means conditions are normal —
 /// good news that must read as such, not as a failed or missing feed.
-class _EmptyAdvisories extends StatelessWidget {
+///
+/// Also the only place this screen offers a next step: a reassuring empty
+/// state with nowhere to go still reads as a dead end, so it carries a CTA
+/// into a fresh chat for whatever the standard advisories didn't cover.
+class _EmptyAdvisories extends ConsumerWidget {
   const _EmptyAdvisories();
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.check_circle_outline,
-            size: AppRadius.iconSize,
-            color: AppColors.textSecondary,
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.check_circle_outline,
+                size: AppRadius.iconSize,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  'No advisories for this area — conditions look normal.',
+                  style: AppTypography.body(AppColors.textSecondary),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              'No advisories for this area — conditions look normal.',
-              style: AppTypography.body(AppColors.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          'Want something specific?',
+          style: AppTypography.label(AppColors.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        TextButton(
+          onPressed: () {
+            // Mirrors app_drawer.dart's "New chat" entry exactly: reset
+            // the controller before navigating, so the composer opens on
+            // a genuinely blank conversation rather than whatever was
+            // last open. Deliberately no prefilled text — the composer's
+            // own hint already invites a question.
+            ref.read(chatControllerProvider.notifier).startNew();
+            context.go('/chat');
+          },
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.textPrimary,
+            side: const BorderSide(color: AppColors.textPrimary),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xxl,
+              vertical: AppSpacing.md,
             ),
           ),
-        ],
-      ),
+          child: Text('Ask a question', style: AppTypography.body(AppColors.textPrimary)),
+        ),
+      ],
     );
   }
 }

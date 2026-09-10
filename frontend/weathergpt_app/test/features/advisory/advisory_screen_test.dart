@@ -2,15 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/network/app_error.dart';
+import 'package:weathergpt_app/core/router/app_router.dart';
 import 'package:weathergpt_app/core/theme/app_colors.dart';
 import 'package:weathergpt_app/data/advisory_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
+import 'package:weathergpt_app/data/chat_api.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/advisory/advisory_controller.dart';
 import 'package:weathergpt_app/features/advisory/advisory_screen.dart';
+import 'package:weathergpt_app/features/chat/chat_controller.dart';
+import 'package:weathergpt_app/features/chat/chat_screen.dart';
+import 'package:weathergpt_app/features/chat/conversation_store.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
 import 'package:weathergpt_app/features/home/widgets/alert_banner.dart';
+
+import '../../support/fake_apis.dart';
 
 /// Advisories reads its location from Home rather than resolving its own —
 /// these tests fix Home's state directly (bypassing its real fetch
@@ -238,6 +245,69 @@ void main() {
 
     expect(find.textContaining('No advisories'), findsOneWidget);
     expect(find.textContaining("Couldn't load"), findsNothing);
+    // The empty state must not be a dead end.
+    expect(find.text('Want something specific?'), findsOneWidget);
+    expect(find.text('Ask a question'), findsOneWidget);
+  });
+
+  testWidgets(
+      'the "want something specific" CTA does NOT appear when advisories '
+      'exist', (tester) async {
+    const sentence = 'Heavy rain expected — secure loose hoardings.';
+    final api = _FakeAdvisoryApi(urban: _urban(advisories: const [sentence]));
+    await _pumpAdvisories(tester, homeState: _homeLoaded, advisoryApi: api);
+
+    expect(find.text(sentence), findsOneWidget);
+    expect(find.text('Want something specific?'), findsNothing);
+    expect(find.text('Ask a question'), findsNothing);
+  });
+
+  testWidgets(
+      'tapping the empty-advisories CTA resets the chat controller and '
+      'navigates to chat, not just to a screen that happens to look blank',
+      (tester) async {
+    // Uses the real app router and the shared test fakes (rather than this
+    // file's local `_pumpAdvisories` helper) because `context.go('/chat')`
+    // needs an actual GoRouter ancestor to navigate through.
+    appRouter.go('/advisories');
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: fakeApiOverrides,
+        child: MaterialApp.router(routerConfig: appRouter),
+      ),
+    );
+    // FakeAdvisoryApi (test/support/fake_apis.dart) defaults to an empty
+    // advisory list — no indeterminate spinner survives this settle since
+    // every fake here resolves immediately.
+    await tester.pumpAndSettle();
+
+    expect(find.text('Want something specific?'), findsOneWidget);
+
+    // Seeds an existing conversation BEFORE tapping, so a passing test
+    // proves the tap actually reset the controller — a chat that was
+    // already empty would pass this assertion for the wrong reason.
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AdvisoryScreen)),
+      listen: false,
+    );
+    container.read(chatControllerProvider.notifier).resume(
+          Conversation(
+            id: 'earlier',
+            messages: const [
+              ChatTurn(role: 'user', content: 'earlier question'),
+            ],
+            updatedAt: DateTime(2026, 9, 9),
+          ),
+        );
+    expect(container.read(chatControllerProvider).messages, isNotEmpty);
+
+    await tester.tap(find.text('Ask a question'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatScreen), findsOneWidget);
+    // The reset, not just the navigation, is what this test is for.
+    expect(container.read(chatControllerProvider).messages, isEmpty);
   });
 
   testWidgets('a real advisory sentence renders in full, not truncated',

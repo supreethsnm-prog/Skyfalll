@@ -8,6 +8,16 @@ NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org/search"
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 _USER_AGENT = "WeatherGPT/0.1 (SIH 2026 hackathon project)"
 
+# Nominatim returns place names in the LOCAL language by default, so a
+# reverse lookup in Nepal came back as "नेपाल" and one in Tamil Nadu would
+# come back in Tamil — inconsistent with the rest of the app's English UI,
+# and unreadable to a user who does not read that script.
+#
+# "en" first with a bare quality-ranked fallback: where a place has no
+# English exonym, Nominatim falls back to the local name, which is the
+# right answer rather than a blank.
+_ACCEPT_LANGUAGE = "en"
+
 logger = logging.getLogger(__name__)
 
 # Address keys to try, most specific first, when naming a coordinate.
@@ -76,7 +86,10 @@ class NominatimGeocodingProvider:
                     # would put a street address in the Home hero.
                     "zoom": 10,
                 },
-                headers={"User-Agent": _USER_AGENT},
+                headers={
+                    "User-Agent": _USER_AGENT,
+                    "Accept-Language": _ACCEPT_LANGUAGE,
+                },
             )
             response.raise_for_status()
             result = response.json()
@@ -123,7 +136,10 @@ class NominatimGeocodingProvider:
                     "limit": 1,
                     "addressdetails": 1,
                 },
-                headers={"User-Agent": _USER_AGENT},
+                headers={
+                    "User-Agent": _USER_AGENT,
+                    "Accept-Language": _ACCEPT_LANGUAGE,
+                },
             )
             response.raise_for_status()
             results = response.json()
