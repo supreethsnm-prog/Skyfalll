@@ -14,7 +14,7 @@ class _FakeGfsProvider:
         self._run = run
         self._points_by_hour = points_by_hour or {}
 
-    def discover_latest_run(self):
+    def discover_latest_run(self, probe_forecast_hour: int = 0):
         return self._run
 
     def fetch_india_grid(self, run_date, run_hour, forecast_hour):
@@ -132,7 +132,7 @@ def test_ingest_failure_partway_through_leaves_old_run_fully_intact(clean_gfs_fo
         def __init__(self):
             self.calls = 0
 
-        def discover_latest_run(self):
+        def discover_latest_run(self, probe_forecast_hour: int = 0):
             return ("20260908", "00")
 
         def fetch_india_grid(self, run_date, run_hour, forecast_hour):

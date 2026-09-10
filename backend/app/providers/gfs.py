@@ -149,13 +149,26 @@ class NoaaGfsProvider:
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=60.0)
 
-    def discover_latest_run(self) -> tuple[str, str]:
-        """Return the (run_date, run_hour) of the newest published GFS cycle.
+    def discover_latest_run(self, probe_forecast_hour: int = 0) -> tuple[str, str]:
+        """Return the (run_date, run_hour) of the newest usable GFS cycle.
 
         Walks today's already-elapsed synoptic hours newest-first, then all of
-        yesterday's, HEAD-ing each candidate's f000 ``.idx`` key. The newest
+        yesterday's, HEAD-ing each candidate's ``.idx`` key. The newest
         elapsed cycle is frequently not published yet (GFS lags its cycle time
         by a few hours), so a 404 here is normal, not an error.
+
+        [probe_forecast_hour] is which forecast hour to probe, and it must be
+        the LAST hour the caller intends to fetch — not the default 0.
+
+        NOAA publishes a cycle's forecast hours PROGRESSIVELY: f000 appears
+        within minutes, f120 several hours later. Probing f000 therefore
+        reports a cycle as available while its later hours are still missing,
+        and the caller then 404s partway through ingestion. That is not a
+        hypothetical — it is what happens for a few hours after every cycle,
+        i.e. much of the day. Probing the last hour instead means a cycle is
+        only selected once it can actually satisfy the whole request, and an
+        incomplete newest cycle falls back to the previous one, which is
+        exactly the behaviour the fallback list already provides.
         """
         now = _utcnow()
         candidates: list[tuple[str, str]] = []
@@ -167,7 +180,10 @@ class NoaaGfsProvider:
             candidates.append((yesterday.strftime("%Y%m%d"), hour))
 
         for run_date, run_hour in candidates:
-            idx_url = f"{GFS_BASE_URL}/{_run_key(run_date, run_hour, 0)}.idx"
+            idx_url = (
+                f"{GFS_BASE_URL}/"
+                f"{_run_key(run_date, run_hour, probe_forecast_hour)}.idx"
+            )
             try:
                 response = call_with_retries(lambda url=idx_url: self._client.head(url))
             except httpx.HTTPStatusError as exc:

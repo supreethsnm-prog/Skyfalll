@@ -48,7 +48,14 @@ def ingest_gfs_forecast(
     forecast_hours = forecast_hours if forecast_hours is not None else _DEFAULT_FORECAST_HOURS
 
     try:
-        run_date, run_hour = provider.discover_latest_run()
+        # Probe the FURTHEST hour we intend to fetch, not f000. A cycle
+        # publishes its forecast hours progressively, so f000 existing does
+        # not mean f120 does — and selecting a cycle on f000 alone makes
+        # this whole ingestion 404 partway through for the several hours
+        # after each cycle drops. See discover_latest_run's docstring.
+        run_date, run_hour = provider.discover_latest_run(
+            probe_forecast_hour=max(forecast_hours),
+        )
 
         # All network I/O happens BEFORE the transaction opens (the same
         # ordering app/ingestion/alerts.py uses). Each forecast hour's fetch
