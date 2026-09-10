@@ -31,6 +31,7 @@ def test_tool_specs_cover_all_ten_data_sources():
         "agriculture_advisory",
         "urban_advisory",
         "get_nwp_forecast",
+        "translate_text",
         "get_historical_weather",
     }
 

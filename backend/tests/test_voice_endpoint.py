@@ -136,6 +136,8 @@ def test_voice_chat_rejects_non_wav_upload():
 
 def test_voice_chat_returns_503_when_bhashini_not_configured(monkeypatch):
     monkeypatch.setenv("BHASHINI_USER_ID", "")
+    monkeypatch.setenv("BHASHINI_API_KEY", "")
+    monkeypatch.setenv("BHASHINI_UDYAT_KEY", "")
     monkeypatch.setenv("BHASHINI_INFERENCE_KEY", "")
     monkeypatch.setenv("BHASHINI_PIPELINE_ID", "")
     from app.config import get_settings

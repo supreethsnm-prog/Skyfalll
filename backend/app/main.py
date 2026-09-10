@@ -46,7 +46,9 @@ from app.providers.incois import INCOISMarineProvider
 from app.providers.llm import LLMProvider
 from app.providers.sachet import SACHETWarningProvider
 from app.providers.speech import SpeechToTextProvider, TextToSpeechProvider
+from app.providers.translation import TranslatorProvider
 from app.realtime.manager import connection_manager, make_new_alerts_broadcaster
+from app.translation.service import translate_text
 from app.scheduler import IngestionScheduler
 from app.skills.agriculture import get_agriculture_advisory
 from app.skills.urban import get_urban_advisory
@@ -596,4 +598,44 @@ def voice_chat_endpoint(
         # without leaking the vendor's raw exception text to the client.
         raise HTTPException(
             status_code=503, detail="The voice provider is temporarily unavailable. Please try again shortly."
+        ) from e
+
+
+def get_translator_provider() -> Generator[TranslatorProvider, None, None]:
+    try:
+        provider = BhashiniSpeechProvider()
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    try:
+        yield provider
+    finally:
+        provider.close()
+
+
+@app.get("/translate")
+def translate_endpoint(
+    text: str = Query(..., min_length=1, max_length=2000),
+    source: str = Query(..., min_length=2, max_length=10),
+    target: str = Query(..., min_length=2, max_length=10),
+    translator: TranslatorProvider = Depends(get_translator_provider),
+) -> dict:
+    """Deterministic text translation via Bhashini NMT (IndicTrans2).
+
+    Use for exact strings (alerts, advisories, UI labels) where LLM
+    paraphrase must not drift numbers/units. Free-form chat stays on the LLM.
+    ISO-639 codes, e.g. source=en target=hi. 22 scheduled languages + en.
+    """
+    try:
+        return translate_text(
+            text=text, source_language=source, target_language=target, provider=translator
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except (KeyError, IndexError) as e:
+        raise HTTPException(
+            status_code=502, detail="The translation provider returned an invalid response. Please try again."
+        ) from e
+    except (httpx.HTTPStatusError, httpx.TransportError) as e:
+        raise HTTPException(
+            status_code=503, detail="The translation provider is temporarily unavailable. Please try again shortly."
         ) from e

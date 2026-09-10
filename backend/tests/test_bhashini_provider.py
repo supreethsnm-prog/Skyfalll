@@ -66,12 +66,62 @@ def test_raises_without_credentials(monkeypatch):
         get_settings.cache_clear()
 
 
-def test_raises_without_pipeline_id(monkeypatch):
+def test_defaults_to_meity_pipeline_id_when_pipeline_id_not_set(monkeypatch):
     monkeypatch.setenv("BHASHINI_PIPELINE_ID", "")
+    monkeypatch.setenv("BHASHINI_API_KEY", "")
+    monkeypatch.setenv("BHASHINI_UDYAT_KEY", "")
+    monkeypatch.setenv("BHASHINI_INFERENCE_KEY", "")
     get_settings.cache_clear()
     try:
-        with pytest.raises(ValueError, match="BHASHINI_PIPELINE_ID"):
-            BhashiniSpeechProvider(user_id="u", inference_key="k", pipeline_id=None)
+        provider = BhashiniSpeechProvider(
+            user_id="u", api_key="ulca-key", inference_key="dhruva-token", pipeline_id=None
+        )
+        assert provider._pipeline_id == "64392f96daac500b55c543cd"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_raises_without_api_key(monkeypatch):
+    monkeypatch.setenv("BHASHINI_API_KEY", "")
+    monkeypatch.setenv("BHASHINI_UDYAT_KEY", "")
+    monkeypatch.setenv("BHASHINI_INFERENCE_KEY", "")
+    get_settings.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="BHASHINI_API_KEY"):
+            BhashiniSpeechProvider(user_id="u", api_key=None, inference_key=None, pipeline_id="p")
+    finally:
+        get_settings.cache_clear()
+
+
+def test_prefers_api_key_for_ulca_header_over_inference_key():
+    capture = {}
+    client = _client_for(_DISCOVERY_RESPONSE, _ASR_COMPUTE_RESPONSE, capture)
+    provider = BhashiniSpeechProvider(
+        user_id="test-user",
+        api_key="ulca-real-key",
+        inference_key="dhruva-token",
+        pipeline_id="test-pipeline",
+        client=client,
+    )
+    provider.transcribe(audio_base64="ZmFrZQ==", audio_format="wav", language="hi")
+    # Discovery must carry the ULCA key, never the Dhruva token.
+    assert capture["discovery_headers"]["ulcaapikey"] == "ulca-real-key"
+    # Compute still uses the dynamic discovery-provided header/value.
+    assert capture["compute_headers"]["x-compute-auth-key"] == "compute-secret-abc"
+
+
+def test_udyat_key_alias_used_when_api_key_missing(monkeypatch):
+    monkeypatch.setenv("BHASHINI_API_KEY", "")
+    monkeypatch.setenv("BHASHINI_UDYAT_KEY", "udyat-alias-key")
+    monkeypatch.setenv("BHASHINI_INFERENCE_KEY", "dhruva-token")
+    monkeypatch.setenv("BHASHINI_USER_ID", "u")
+    monkeypatch.setenv("BHASHINI_PIPELINE_ID", "p")
+    get_settings.cache_clear()
+    try:
+        capture = {}
+        client = _client_for(_DISCOVERY_RESPONSE, _ASR_COMPUTE_RESPONSE, capture)
+        provider = BhashiniSpeechProvider(user_id=None, api_key=None, inference_key=None, client=client)
+        assert provider._api_key == "udyat-alias-key"
     finally:
         get_settings.cache_clear()
 
@@ -172,3 +222,58 @@ def test_close_only_closes_self_owned_client():
     provider2.close()
 
     assert provider2._client.is_closed is True
+
+
+_NMT_DISCOVERY_RESPONSE = {
+    "pipelineResponseConfig": [
+        {
+            "taskType": "translation",
+            "config": [{"serviceId": "nmt-service-1", "modelId": "nmt-model-1"}],
+        },
+    ],
+    "pipelineInferenceAPIEndPoint": {
+        "callbackUrl": "https://dhruva-api.bhashini.gov.in/services/inference/pipeline",
+        "inferenceApiKey": {"name": "Authorization", "value": "compute-secret-abc"},
+    },
+}
+
+_NMT_COMPUTE_RESPONSE = {
+    "pipelineResponse": [{"taskType": "translation", "output": [{"source": "Heavy rainfall expected", "target": "भारी वर्षा की संभावना"}]}]
+}
+
+
+def test_translate_sends_source_and_target_and_parses_target():
+    capture = {}
+    client = _client_for(_NMT_DISCOVERY_RESPONSE, _NMT_COMPUTE_RESPONSE, capture)
+    provider = BhashiniSpeechProvider(
+        user_id="u", api_key="ulca-key", inference_key="dhruva", pipeline_id="p", client=client
+    )
+    result = provider.translate(text="Heavy rainfall expected", source_language="en", target_language="hi")
+    assert result.text == "भारी वर्षा की संभावना"
+    assert result.source_language == "en"
+    assert result.target_language == "hi"
+    assert capture["discovery_request"]["pipelineTasks"][0]["config"]["language"] == {
+        "sourceLanguage": "en",
+        "targetLanguage": "hi",
+    }
+    assert capture["compute_request"]["pipelineTasks"][0]["config"]["serviceId"] == "nmt-service-1"
+    assert capture["compute_request"]["inputData"]["input"][0]["source"] == "Heavy rainfall expected"
+
+
+def test_translate_falls_back_to_inference_key_when_discovery_omits_value():
+    no_key_response = {
+        "pipelineResponseConfig": [
+            {"taskType": "translation", "config": [{"serviceId": "nmt-1"}]},
+        ],
+        "pipelineInferenceAPIEndPoint": {
+            "callbackUrl": "https://dhruva-api.bhashini.gov.in/services/inference/pipeline",
+        },
+    }
+    capture = {}
+    client = _client_for(no_key_response, _NMT_COMPUTE_RESPONSE, capture)
+    provider = BhashiniSpeechProvider(
+        user_id="u", api_key="ulca-key", inference_key="fallback-dhruva", pipeline_id="p", client=client
+    )
+    result = provider.translate(text="hi", source_language="en", target_language="hi")
+    assert result.text == "भारी वर्षा की संभावना"
+    assert capture["compute_headers"]["authorization"] == "fallback-dhruva"

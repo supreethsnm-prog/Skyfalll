@@ -18,6 +18,7 @@ from app.nwp.service import get_nwp_forecast
 from app.providers.llm import ToolSpec
 from app.skills.agriculture import get_agriculture_advisory
 from app.skills.urban import get_urban_advisory
+from app.translation.service import translate_text
 from app.warning.service import list_alerts
 from app.weather.service import get_weather
 
@@ -160,6 +161,25 @@ TOOL_SPECS: list[ToolSpec] = [
         },
     ),
     ToolSpec(
+        name="translate_text",
+        description=(
+            "Translate an exact string deterministically via Bhashini NMT "
+            "(IndicTrans2, 22 scheduled languages + English). Use for alerts, "
+            "advisories, or UI labels where numbers/units must not drift. "
+            "Free-form conversation stays on the LLM — this is for literal "
+            "translation only. ISO-639 codes, e.g. source 'en', target 'hi'."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Text to translate, e.g. 'Heavy rainfall expected'"},
+                "source": {"type": "string", "description": "Source ISO-639 code, e.g. 'en'"},
+                "target": {"type": "string", "description": "Target ISO-639 code, e.g. 'hi'"},
+            },
+            "required": ["text", "source", "target"],
+        },
+    ),
+    ToolSpec(
         name="get_historical_weather",
         description=(
             "Get historical weather (temperature, precipitation, wind, pressure) for a "
@@ -251,6 +271,14 @@ def _handle_get_nwp_forecast(tool_input: dict) -> list[dict]:
     return get_nwp_forecast(latitude=tool_input["latitude"], longitude=tool_input["longitude"])
 
 
+def _handle_translate_text(tool_input: dict) -> dict:
+    return translate_text(
+        text=tool_input["text"],
+        source_language=tool_input["source"],
+        target_language=tool_input["target"],
+    )
+
+
 def _handle_get_historical_weather(tool_input: dict) -> dict:
     result = get_historical_weather(tool_input["location"], tool_input["date"])
     if result is None:
@@ -273,6 +301,7 @@ _HANDLERS = {
     "agriculture_advisory": _handle_agriculture_advisory,
     "urban_advisory": _handle_urban_advisory,
     "get_nwp_forecast": _handle_get_nwp_forecast,
+    "translate_text": _handle_translate_text,
     "get_historical_weather": _handle_get_historical_weather,
 }
 

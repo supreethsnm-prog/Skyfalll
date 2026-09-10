@@ -35,8 +35,20 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000,http://127.0.0.1:5173"
     )
     bhashini_user_id: str | None = None
+    # Canonical ULCA API key for the discovery call header `ulcaApiKey`.
+    # BHASHINI_UDYAT_KEY is accepted as a legacy alias for the same value
+    # (UDYAT is the ULCA dashboard name) so existing .env files keep working.
+    bhashini_api_key: str | None = None
+    bhashini_udyat_key: str | None = None
+    # Dhruva compute token returned by discovery as
+    # pipelineInferenceAPIEndPoint.inferenceApiKey.value. Distinct from the
+    # ULCA API key above — never send this as `ulcaApiKey` (that yields
+    # `400 ulcaApiKey does not exist`).
     bhashini_inference_key: str | None = None
-    bhashini_pipeline_id: str | None = None
+    # MeitY public multitask pipeline (ASR+NMT+TTS, 22 scheduled languages +
+    # English), live-verified 2026-09-10. Shared catalogue entry, not a
+    # per-user secret. Override in .env for a custom pipeline.
+    bhashini_pipeline_id: str | None = "64392f96daac500b55c543cd"
     cds_api_key: str | None = None
 
 
