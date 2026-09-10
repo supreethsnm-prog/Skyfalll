@@ -8,6 +8,12 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
 
+    <!-- Voice input to chat (record -> BHASHINI STT -> reply -> TTS).
+         Requested at the point the mic is first tapped, not on launch —
+         see MicPermission — and declining is handled: the composer stays
+         a working text input, never a broken screen. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
     <application
         android:label="weathergpt_app"
         android:name="${applicationName}"

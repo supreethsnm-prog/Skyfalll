@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/app_error.dart';
 import '../../data/chat_api.dart';
+import '../../data/voice_api.dart';
 import 'conversation_store.dart';
 
 sealed class ChatUiState {
@@ -31,6 +34,7 @@ class ChatFailed extends ChatUiState {
 }
 
 final chatApiProvider = Provider<ChatApi>((ref) => ChatApi(buildApiClient()));
+final voiceApiProvider = Provider<VoiceApi>((ref) => VoiceApi(buildApiClient()));
 
 final chatControllerProvider =
     NotifierProvider<ChatController, ChatUiState>(ChatController.new);
@@ -152,6 +156,62 @@ class ChatController extends Notifier<ChatUiState> {
       await _persist(displayed);
     } on AppError catch (e) {
       state = ChatFailed(optimisticMessages, text, historyForThisRequest, e);
+    }
+  }
+
+  /// Sends a recorded voice message: uploads [audioPath] for
+  /// transcription, appends both the transcript and the reply to the
+  /// SAME conversation a text turn would, and reports the reply's audio
+  /// (if synthesis succeeded) via [onReplyAudio] for the caller to
+  /// auto-play — this controller has no audio-player dependency of its
+  /// own, by design (that stays a UI-layer concern, shared with the
+  /// per-message "read aloud" button).
+  ///
+  /// Unlike [sendMessage], there is no optimistic user bubble: the
+  /// transcript does not exist yet when the request starts, so there is
+  /// nothing honest to show until the response arrives.
+  ///
+  /// The uploaded file is deleted afterwards either way — it has no use
+  /// once the request completes, successfully or not, and voice messages
+  /// would otherwise accumulate unbounded in the temp directory over a
+  /// session.
+  Future<void> sendVoice(
+    String audioPath,
+    String language, {
+    void Function(String audioBase64)? onReplyAudio,
+    void Function(AppError error)? onError,
+  }) async {
+    final api = ref.read(voiceApiProvider);
+    final historyForThisRequest = _rawHistory;
+    final previousMessages = state.messages;
+    state = ChatSending(previousMessages);
+
+    try {
+      final result = await api.sendVoiceMessage(
+        audioFile: File(audioPath),
+        language: language,
+        history: historyForThisRequest,
+      );
+      _rawHistory = result.history;
+      final displayed = result.history
+          .map(ChatTurn.tryFromRaw)
+          .whereType<ChatTurn>()
+          .toList();
+      state = ChatIdle(displayed);
+      await _persist(displayed);
+      if (result.replyAudioBase64.isNotEmpty) {
+        onReplyAudio?.call(result.replyAudioBase64);
+      }
+    } on AppError catch (e) {
+      // No transcript exists to show as "the message that failed" and no
+      // text to retry with (unlike a failed text send) — the honest
+      // outcome is reverting to exactly where the user was, with the
+      // error surfaced as a transient notice rather than a stuck bubble.
+      state = ChatIdle(previousMessages);
+      onError?.call(e);
+    } finally {
+      final file = File(audioPath);
+      if (await file.exists()) await file.delete();
     }
   }
 

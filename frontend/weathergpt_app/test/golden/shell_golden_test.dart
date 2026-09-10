@@ -5,12 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:weathergpt_app/core/permissions/mic_permission.dart';
 import 'package:weathergpt_app/core/theme/app_theme.dart';
 import 'package:weathergpt_app/data/chat_api.dart';
 import 'package:weathergpt_app/features/chat/chat_controller.dart';
 import 'package:weathergpt_app/features/chat/conversation_store.dart';
 import 'package:weathergpt_app/features/chat/chat_screen.dart';
+import 'package:weathergpt_app/features/chat/voice_recording_controller.dart';
 import 'package:weathergpt_app/features/shell/app_drawer.dart';
+
+import '../support/fake_apis.dart' show FakeMicPermission, FakeVoiceRecorder;
 
 Future<void> _loadFont(String family, String assetPath) async {
   final bytes = await File(assetPath).readAsBytes();
@@ -221,6 +225,40 @@ void main() {
     await expectLater(
       find.byType(ChatScreen),
       matchesGoldenFile('goldens/chat_conversation.png'),
+    );
+  });
+
+  testWidgets('chat — recording a voice message', (tester) async {
+    _sizeView(tester);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatApiProvider.overrideWithValue(_InertChatApi()),
+          conversationStoreProvider.overrideWithValue(_EmptyConversationStore()),
+          micPermissionProvider
+              .overrideWithValue(FakeMicPermission(MicPermissionResult.granted)),
+          voiceRecorderProvider.overrideWithValue(FakeVoiceRecorder()),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          debugShowCheckedModeBanner: false,
+          home: const ChatScreen(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.mic_none));
+    // A couple of frames so the waveform's Ticker settles into its
+    // resting-level shape — not pumpAndSettle, which would never return
+    // while the Ticker keeps running.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    await expectLater(
+      find.byType(ChatScreen),
+      matchesGoldenFile('goldens/chat_recording.png'),
     );
   });
 }

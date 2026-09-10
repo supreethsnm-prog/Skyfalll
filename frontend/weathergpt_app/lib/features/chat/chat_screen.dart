@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/network/app_error.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/voice_language_prefs.dart';
 import '../../shared/error_message.dart';
 import '../../shared/widgets/app_menu.dart';
 import '../../shared/widgets/round_icon_button.dart';
 import '../shell/app_drawer.dart';
+import 'audio_playback_controller.dart';
 import 'chat_controller.dart';
 import 'widgets/assistant_message.dart';
 import 'widgets/chat_composer.dart';
 import 'widgets/user_bubble.dart';
+
+/// Identifies the reply just spoken back after a voice turn, for
+/// [AudioPlaybackController] — distinct from any transcript-list index
+/// (which shifts as new turns are appended) since this fires once, right
+/// as the new turns land.
+const _voiceReplyPlaybackKey = 'voice-reply';
 
 /// The conversation screen, per `NewChat.jpeg` (empty) and `Convo1.jpeg`
 /// / `Convo2.jpeg` (populated).
@@ -51,6 +60,21 @@ class ChatScreen extends ConsumerWidget {
               // discard the one already in play.
               enabled: state is ChatIdle,
               onSend: controller.sendMessage,
+              onSendVoice: (audioPath) {
+                final language = ref.read(voiceLanguageProvider);
+                controller.sendVoice(
+                  audioPath,
+                  language,
+                  onReplyAudio: (audioBase64) => ref
+                      .read(audioPlaybackControllerProvider.notifier)
+                      .playBase64Wav(audioBase64, turnKey: _voiceReplyPlaybackKey),
+                  onError: (error) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(errorMessageFor(error))),
+                    );
+                  },
+                );
+              },
             ),
           ],
         ),
@@ -135,13 +159,13 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _Transcript extends StatelessWidget {
+class _Transcript extends ConsumerWidget {
   const _Transcript({required this.messages});
 
   final List<dynamic> messages;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
@@ -154,15 +178,63 @@ class _Transcript extends StatelessWidget {
         if (turn.role == 'user') {
           return UserBubble(text: turn.content);
         }
-        return AssistantMessage(
-          text: turn.content,
-          onCopy: () {},
-          onReadAloud: () {},
-          onShare: () {},
-          onMore: () {},
-        );
+        // The turn's position in THIS list, not a stable message id — the
+        // list is rebuilt from `result.history` on every turn, so an
+        // index is stable for exactly as long as a given render, which is
+        // all a "currently reading this one aloud" indicator needs.
+        return _ReadAloudAssistantMessage(text: turn.content, playbackKey: index);
       },
     );
+  }
+}
+
+/// [AssistantMessage] wired to real "read aloud": synthesizes on first
+/// tap, plays through the same shared player voice auto-play uses, and
+/// tapping again on a message already loading/playing stops it — a
+/// second tap must not fire a second synthesis request.
+class _ReadAloudAssistantMessage extends ConsumerWidget {
+  const _ReadAloudAssistantMessage({required this.text, required this.playbackKey});
+
+  final String text;
+  final int playbackKey;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playback = ref.watch(audioPlaybackControllerProvider);
+    final isThisOne = (playback is PlaybackLoading && playback.turnKey == playbackKey) ||
+        (playback is PlaybackPlaying && playback.turnKey == playbackKey);
+
+    return AssistantMessage(
+      text: text,
+      onCopy: () {},
+      onReadAloud: () => _toggle(context, ref, playback, isThisOne),
+      onShare: () {},
+      onMore: () {},
+      readAloudActive: isThisOne,
+    );
+  }
+
+  Future<void> _toggle(
+    BuildContext context,
+    WidgetRef ref,
+    AudioPlaybackUiState playback,
+    bool isThisOne,
+  ) async {
+    final controller = ref.read(audioPlaybackControllerProvider.notifier);
+    if (isThisOne) {
+      await controller.stop();
+      return;
+    }
+    try {
+      final language = ref.read(voiceLanguageProvider);
+      final speech =
+          await ref.read(voiceApiProvider).synthesize(text: text, language: language);
+      await controller.playBase64Wav(speech.audioBase64, turnKey: playbackKey);
+    } on AppError catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(errorMessageFor(e))));
+    }
   }
 }
 

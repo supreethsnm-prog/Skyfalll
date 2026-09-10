@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/network/app_error.dart';
 import 'package:weathergpt_app/data/chat_api.dart';
+import 'package:weathergpt_app/data/voice_api.dart';
 import 'package:weathergpt_app/features/chat/chat_controller.dart';
 import 'package:weathergpt_app/features/chat/conversation_store.dart';
 
@@ -30,15 +33,59 @@ class _NoStore implements ConversationStore {
   Future<void> save(List<Conversation> next) async {}
 }
 
+/// Implements only the public interface VoiceApi exposes.
+class FakeVoiceApi implements VoiceApi {
+  VoiceChatResult? nextResult;
+  AppError? nextError;
+  final List<String> languagesSent = [];
+  final List<List<dynamic>?> historiesSent = [];
+  final List<String> audioPathsSent = [];
+
+  @override
+  Future<VoiceChatResult> sendVoiceMessage({
+    required File audioFile,
+    required String language,
+    List<dynamic>? history,
+  }) async {
+    audioPathsSent.add(audioFile.path);
+    languagesSent.add(language);
+    historiesSent.add(history);
+    if (nextError != null) throw nextError!;
+    return nextResult!;
+  }
+
+  @override
+  Future<List<VoiceLanguage>> fetchLanguages() async => const [];
+
+  @override
+  Future<SynthesizedSpeech> synthesize({required String text, required String language}) async {
+    throw UnimplementedError();
+  }
+}
+
+/// A real, throwaway file — `sendVoice` deletes it after the request, so
+/// the test needs an actual file on disk to assert that against, not
+/// just a path string.
+File _tempWavFile() {
+  final file = File(
+    '${Directory.systemTemp.path}/chat_controller_test_${DateTime.now().microsecondsSinceEpoch}.wav',
+  );
+  file.writeAsBytesSync([0]);
+  return file;
+}
+
 void main() {
   late FakeChatApi fakeApi;
+  late FakeVoiceApi fakeVoiceApi;
   late ProviderContainer container;
 
   setUp(() {
     fakeApi = FakeChatApi();
+    fakeVoiceApi = FakeVoiceApi();
     container = ProviderContainer(
       overrides: [
         chatApiProvider.overrideWithValue(fakeApi),
+        voiceApiProvider.overrideWithValue(fakeVoiceApi),
         // A completed turn is now persisted; without this the controller
         // reaches for shared_preferences, which has no implementation in
         // a plain Dart test.
@@ -136,5 +183,133 @@ void main() {
     final state = container.read(chatControllerProvider);
     expect(state, isA<ChatIdle>());
     expect(state.messages, hasLength(2));
+  });
+
+  group('sendVoice', () {
+    test('unlike sendMessage, adds no optimistic turn — there is no '
+        'transcript to show until the response arrives', () async {
+      final audio = _tempWavFile();
+      fakeVoiceApi.nextResult = const VoiceChatResult(
+        transcript: 'Weather in Pune?',
+        replyText: 'Sunny today',
+        replyAudioBase64: '',
+        history: [
+          {'role': 'user', 'content': 'Weather in Pune?'},
+          {'role': 'assistant', 'content': 'Sunny today'},
+        ],
+      );
+      // Not awaited yet: `sendVoice` sets ChatSending synchronously,
+      // before its first `await`, exactly like `sendMessage` does — so
+      // the intermediate state is observable here without any manual
+      // completer plumbing.
+      final future = container.read(chatControllerProvider.notifier).sendVoice(
+            audio.path,
+            'hi',
+          );
+
+      final sendingState = container.read(chatControllerProvider);
+      expect(sendingState, isA<ChatSending>());
+      expect(sendingState.messages, isEmpty);
+
+      await future;
+    });
+
+    test('a successful voice turn appends the transcript and reply, and '
+        'reports reply audio via onReplyAudio', () async {
+      final audio = _tempWavFile();
+      fakeVoiceApi.nextResult = const VoiceChatResult(
+        transcript: 'Weather in Pune?',
+        replyText: 'Sunny today',
+        replyAudioBase64: 'd2F2ZWZvcm0=',
+        history: [
+          {'role': 'user', 'content': 'Weather in Pune?'},
+          {'role': 'assistant', 'content': 'Sunny today'},
+        ],
+      );
+
+      String? reportedAudio;
+      await container.read(chatControllerProvider.notifier).sendVoice(
+            audio.path,
+            'hi',
+            onReplyAudio: (a) => reportedAudio = a,
+          );
+
+      final state = container.read(chatControllerProvider);
+      expect(state, isA<ChatIdle>());
+      expect(state.messages, hasLength(2));
+      expect(state.messages[0].role, 'user');
+      expect(state.messages[0].content, 'Weather in Pune?');
+      expect(state.messages[1].role, 'assistant');
+      expect(state.messages[1].content, 'Sunny today');
+      expect(reportedAudio, 'd2F2ZWZvcm0=');
+      expect(fakeVoiceApi.languagesSent, ['hi']);
+    });
+
+    test('onReplyAudio is never called when synthesis produced no audio', () async {
+      final audio = _tempWavFile();
+      fakeVoiceApi.nextResult = const VoiceChatResult(
+        transcript: 'Weather?',
+        replyText: 'Sunny',
+        replyAudioBase64: '',
+        history: [
+          {'role': 'user', 'content': 'Weather?'},
+          {'role': 'assistant', 'content': 'Sunny'},
+        ],
+      );
+
+      var called = false;
+      await container.read(chatControllerProvider.notifier).sendVoice(
+            audio.path,
+            'hi',
+            onReplyAudio: (_) => called = true,
+          );
+
+      expect(called, isFalse);
+    });
+
+    test('deletes the recorded file after the request, success or failure', () async {
+      final successAudio = _tempWavFile();
+      fakeVoiceApi.nextResult = const VoiceChatResult(
+        transcript: 'Hi',
+        replyText: 'Hello',
+        replyAudioBase64: '',
+        history: [],
+      );
+      await container.read(chatControllerProvider.notifier).sendVoice(successAudio.path, 'hi');
+      expect(successAudio.existsSync(), isFalse);
+
+      final failureAudio = _tempWavFile();
+      fakeVoiceApi.nextError = const NetworkTimeoutError();
+      await container.read(chatControllerProvider.notifier).sendVoice(failureAudio.path, 'hi');
+      expect(failureAudio.existsSync(), isFalse);
+    });
+
+    test('a failed voice send reverts to the messages from before the '
+        'attempt and surfaces the error via onError — there is no '
+        'transcript to keep as a "failed" turn', () async {
+      fakeApi.nextResult = const ChatResult(
+        reply: 'Earlier reply',
+        history: [
+          {'role': 'user', 'content': 'Earlier question'},
+          {'role': 'assistant', 'content': 'Earlier reply'},
+        ],
+      );
+      await container.read(chatControllerProvider.notifier).sendMessage('Earlier question');
+      final messagesBefore = container.read(chatControllerProvider).messages;
+
+      final audio = _tempWavFile();
+      fakeVoiceApi.nextError = const NetworkConnectionError();
+      AppError? reportedError;
+      await container.read(chatControllerProvider.notifier).sendVoice(
+            audio.path,
+            'hi',
+            onError: (e) => reportedError = e,
+          );
+
+      final state = container.read(chatControllerProvider);
+      expect(state, isA<ChatIdle>());
+      expect(state.messages, equals(messagesBefore));
+      expect(reportedError, isA<NetworkConnectionError>());
+    });
   });
 }

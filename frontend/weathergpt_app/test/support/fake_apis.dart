@@ -1,8 +1,14 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:latlong2/latlong.dart';
+import 'package:weathergpt_app/core/audio/audio_playback_device.dart';
+import 'package:weathergpt_app/core/audio/voice_recorder.dart';
 import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/core/network/app_error.dart';
+import 'package:weathergpt_app/core/permissions/mic_permission.dart';
+import 'package:weathergpt_app/core/voice_language_prefs.dart';
 import 'package:weathergpt_app/data/advisory_api.dart';
 import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
@@ -12,6 +18,7 @@ import 'package:weathergpt_app/data/historical_api.dart';
 import 'package:weathergpt_app/data/marine_api.dart';
 import 'package:weathergpt_app/data/metar_api.dart';
 import 'package:weathergpt_app/data/nwp_api.dart';
+import 'package:weathergpt_app/data/voice_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/aviation/aviation_controller.dart';
 import 'package:weathergpt_app/features/advisory/advisory_controller.dart';
@@ -366,6 +373,146 @@ class FakeConversationStore implements ConversationStore {
 
   @override
   Future<void> save(List<Conversation> next) async => conversations = next;
+}
+
+/// In-memory voice-language preference, so `voiceLanguageProvider`'s
+/// `build()` does not reach for shared_preferences in a widget test.
+class FakeVoiceLanguagePrefs implements VoiceLanguagePrefs {
+  FakeVoiceLanguagePrefs([this.languageCode = defaultVoiceLanguageCode]);
+
+  String languageCode;
+
+  @override
+  Future<String> load() async => languageCode;
+
+  @override
+  Future<void> save(String code) async => languageCode = code;
+}
+
+/// A fixed permission outcome — no real microphone, no plugin.
+class FakeMicPermission implements MicPermission {
+  FakeMicPermission([this.result = MicPermissionResult.granted]);
+
+  MicPermissionResult result;
+
+  @override
+  Future<MicPermissionResult> request() async => result;
+}
+
+/// A recorder that never touches the microphone or a platform channel.
+/// `stop()` returns [fixedStopPath] every time, standing in for "the
+/// file that was recorded" without ever writing one.
+class FakeVoiceRecorder implements VoiceRecorder {
+  FakeVoiceRecorder({this.fixedStopPath = '/tmp/fake_voice_message.wav'});
+
+  final String fixedStopPath;
+  final List<String> startCalls = [];
+  int stopCalls = 0;
+  int cancelCalls = 0;
+  final StreamController<double> _amplitudeController = StreamController.broadcast();
+
+  @override
+  Future<void> start() async {
+    startCalls.add(fixedStopPath);
+  }
+
+  @override
+  Future<String?> stop() async {
+    stopCalls++;
+    return fixedStopPath;
+  }
+
+  @override
+  Future<void> cancel() async {
+    cancelCalls++;
+  }
+
+  @override
+  Stream<double> get amplitude => _amplitudeController.stream;
+
+  @override
+  Future<void> dispose() async {
+    await _amplitudeController.close();
+  }
+}
+
+/// Wraps `VoiceApi`'s public interface with fixed/injectable responses.
+class FakeVoiceApi implements VoiceApi {
+  FakeVoiceApi({
+    this.languages = const [],
+    this.languagesError,
+    this.chatResult,
+    this.chatError,
+    this.synthesizeResult,
+    this.synthesizeError,
+  });
+
+  List<VoiceLanguage> languages;
+  AppError? languagesError;
+  VoiceChatResult? chatResult;
+  AppError? chatError;
+  SynthesizedSpeech? synthesizeResult;
+  AppError? synthesizeError;
+  final List<String> languagesRequestedForChat = [];
+  final List<String> textsRequestedForSynthesis = [];
+
+  @override
+  Future<List<VoiceLanguage>> fetchLanguages() async {
+    if (languagesError != null) throw languagesError!;
+    return languages;
+  }
+
+  @override
+  Future<VoiceChatResult> sendVoiceMessage({
+    required File audioFile,
+    required String language,
+    List<dynamic>? history,
+  }) async {
+    languagesRequestedForChat.add(language);
+    if (chatError != null) throw chatError!;
+    return chatResult!;
+  }
+
+  @override
+  Future<SynthesizedSpeech> synthesize({required String text, required String language}) async {
+    textsRequestedForSynthesis.add(text);
+    if (synthesizeError != null) throw synthesizeError!;
+    return synthesizeResult!;
+  }
+}
+
+/// A playback device that never touches real audio hardware. `playBytes`
+/// resolves immediately by default (`autoComplete: true`) — enough for
+/// tests that only care an active playback was requested and finished;
+/// tests that need to inspect the in-between "playing" state should pass
+/// `autoComplete: false` and complete `pendingPlays` themselves.
+class FakeAudioPlaybackDevice implements AudioPlaybackDevice {
+  FakeAudioPlaybackDevice({this.autoComplete = true});
+
+  final bool autoComplete;
+  final List<Uint8List> playedBytes = [];
+  final List<Completer<void>> pendingPlays = [];
+  int stopCalls = 0;
+
+  @override
+  Future<void> playBytes(Uint8List bytes) {
+    playedBytes.add(bytes);
+    final completer = Completer<void>();
+    pendingPlays.add(completer);
+    if (autoComplete) completer.complete();
+    return completer.future;
+  }
+
+  @override
+  Future<void> stop() async {
+    stopCalls++;
+    for (final p in pendingPlays.where((p) => !p.isCompleted)) {
+      p.complete();
+    }
+  }
+
+  @override
+  Future<void> dispose() async {}
 }
 
 /// Drop-in overrides for any `ProviderScope` mounting `HomeScreen`.

@@ -20,6 +20,7 @@ class AssistantMessage extends StatelessWidget {
     this.onReadAloud,
     this.onShare,
     this.onMore,
+    this.readAloudActive = false,
   });
 
   final String text;
@@ -27,6 +28,11 @@ class AssistantMessage extends StatelessWidget {
   final VoidCallback? onReadAloud;
   final VoidCallback? onShare;
   final VoidCallback? onMore;
+
+  /// Whether this message's reply is currently being synthesized or
+  /// played back — tints the read-aloud icon so exactly one message's
+  /// icon reads as "active" at a time, matching what is actually audible.
+  final bool readAloudActive;
 
   bool get _hasActions =>
       onCopy != null || onReadAloud != null || onShare != null || onMore != null;
@@ -48,6 +54,7 @@ class AssistantMessage extends StatelessWidget {
             onReadAloud: onReadAloud,
             onShare: onShare,
             onMore: onMore,
+            readAloudActive: readAloudActive,
           ),
         ],
       ],
@@ -61,12 +68,14 @@ class _ActionRow extends StatelessWidget {
     required this.onReadAloud,
     required this.onShare,
     required this.onMore,
+    required this.readAloudActive,
   });
 
   final VoidCallback? onCopy;
   final VoidCallback? onReadAloud;
   final VoidCallback? onShare;
   final VoidCallback? onMore;
+  final bool readAloudActive;
 
   @override
   Widget build(BuildContext context) {
@@ -81,9 +90,10 @@ class _ActionRow extends StatelessWidget {
           ),
         if (onReadAloud != null)
           _ActionIcon(
-            icon: Icons.volume_up_outlined,
-            label: 'Read aloud',
+            icon: readAloudActive ? Icons.volume_up : Icons.volume_up_outlined,
+            label: readAloudActive ? 'Stop reading aloud' : 'Read aloud',
             onPressed: onReadAloud!,
+            active: readAloudActive,
           ),
         if (onShare != null)
           _ActionIcon(
@@ -120,11 +130,17 @@ class _ActionIcon extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onPressed,
+    this.active = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
+
+  /// Tints the glyph the app's accent colour instead of the usual muted
+  /// outline tone — used only by read-aloud, to show which single message
+  /// (if any) is currently being synthesized or spoken.
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
@@ -137,7 +153,11 @@ class _ActionIcon extends StatelessWidget {
         child: IconButton(
           onPressed: onPressed,
           tooltip: label,
-          icon: Icon(icon, size: AppRadius.iconSize, color: AppColors.textSecondary),
+          icon: Icon(
+            icon,
+            size: AppRadius.iconSize,
+            color: active ? AppColors.accent : AppColors.textSecondary,
+          ),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(
             minWidth: AppRadius.iconButton,
