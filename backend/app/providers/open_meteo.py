@@ -11,9 +11,14 @@ _CURRENT_FIELDS = (
     "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,"
     "wind_direction_10m,apparent_temperature,pressure_msl,dew_point_2m"
 )
-# `visibility` is hourly-only upstream — Open-Meteo does not offer it in
-# the `current` block — so it is read from the hour matching `observed_at`.
-_HOURLY_FIELDS = "temperature_2m,weather_code,visibility"
+# `visibility` and `uv_index` are hourly-only upstream — Open-Meteo does
+# not offer either in the `current` block — so both are read from the hour
+# matching `observed_at`.
+#
+# UV in particular MUST come from here and not from `daily.uv_index_max`:
+# the daily field is the day's PEAK, so surfacing it as "UV index" told a
+# user in Dharwad it was 9 ("Very high") at 21:09, in the dark.
+_HOURLY_FIELDS = "temperature_2m,weather_code,visibility,uv_index"
 _DAILY_FIELDS = (
     "weather_code,temperature_2m_max,temperature_2m_min,"
     "precipitation_probability_max,precipitation_sum,wind_speed_10m_max,"
@@ -48,20 +53,21 @@ def hour_key(timestamp: str) -> str:
     return timestamp[:13]
 
 
-def _visibility_km_at(payload: dict, observed_at: str) -> float | None:
-    """Visibility for the hour containing `observed_at`, converted to km.
+def _hourly_value_at(payload: dict, field: str, observed_at: str) -> float | None:
+    """One hourly field's value for the hour containing `observed_at`.
 
-    Open-Meteo publishes visibility only in the hourly block and only in
-    metres, so this locates the containing hour and converts. Returns None
-    if the block, the field, or that hour is missing — visibility is
-    supplementary and must never fail a current-conditions fetch.
+    Some fields exist only in Open-Meteo's hourly block, so a current
+    reading has to be located within that series. Returns None if the
+    block, the field, or that hour is missing — every caller of this is
+    supplementary data, and a missing one must never fail a
+    current-conditions fetch.
     """
     hourly = payload.get("hourly")
     if not isinstance(hourly, dict):
         return None
 
     times = hourly.get("time")
-    values = hourly.get("visibility")
+    values = hourly.get(field)
     if not times or not values:
         return None
 
@@ -72,7 +78,16 @@ def _visibility_km_at(payload: dict, observed_at: str) -> float | None:
     )
     if index is None or index >= len(values) or values[index] is None:
         return None
-    return values[index] / 1000.0
+    return values[index]
+
+
+def _visibility_km_at(payload: dict, observed_at: str) -> float | None:
+    """Visibility for the hour containing `observed_at`, converted to km.
+
+    Open-Meteo reports visibility in metres; every consumer wants km.
+    """
+    metres = _hourly_value_at(payload, "visibility", observed_at)
+    return None if metres is None else metres / 1000.0
 
 
 def _zip_hourly(payload: dict) -> list[dict] | None:
@@ -139,6 +154,7 @@ class OpenMeteoWeatherProvider:
                     dew_point_c=current.get("dew_point_2m"),
                     hourly=_zip_hourly(payload),
                     visibility_km=_visibility_km_at(payload, current["time"]),
+                    uv_index=_hourly_value_at(payload, "uv_index", current["time"]),
                 )
             except (KeyError, TypeError) as exc:
                 logger.warning(

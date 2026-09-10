@@ -25,6 +25,9 @@ def test_weather_readings_table_exists_with_expected_columns():
         "pressure_hpa",
         "dew_point_c",
         "visibility_km",
+        # Current-hour UV. Distinct from weather_forecasts.uv_index_max,
+        # which is the day's PEAK and must never stand in for this one.
+        "uv_index",
         "hourly",
     }
 

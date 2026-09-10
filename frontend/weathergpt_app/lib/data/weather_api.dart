@@ -29,6 +29,10 @@ class CurrentWeather {
   final double? dewPointC;
   final double? visibilityKm;
 
+  /// UV for the CURRENT hour, not the day's peak — the backend reads it
+  /// from Open-Meteo's hourly block for exactly this reason.
+  final double? uvIndex;
+
   /// The next 24 hours, already trimmed by the backend. Null when the
   /// cached reading predates the field.
   final List<HourlyPoint>? hourly;
@@ -45,6 +49,7 @@ class CurrentWeather {
     this.pressureHpa,
     this.dewPointC,
     this.visibilityKm,
+    this.uvIndex,
     this.hourly,
   });
 
@@ -61,6 +66,7 @@ class CurrentWeather {
       pressureHpa: _asDoubleOrNull(json['pressure_hpa']),
       dewPointC: _asDoubleOrNull(json['dew_point_c']),
       visibilityKm: _asDoubleOrNull(json['visibility_km']),
+      uvIndex: _asDoubleOrNull(json['uv_index']),
       hourly: (json['hourly'] as List<dynamic>?)
           ?.map((e) => HourlyPoint.fromJson(e as Map<String, dynamic>))
           .toList(),

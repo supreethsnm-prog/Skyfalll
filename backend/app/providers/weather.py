@@ -25,6 +25,7 @@ class WeatherReadingData:
     # Upstream publishes this hourly and in metres; the provider picks the
     # hour matching observed_at and converts to km.
     visibility_km: float | None = None
+    uv_index: float | None = None
 
     # Hourly series: [{"time": str, "temperature_c": float,
     # "weather_code": int}, ...], oldest first, exactly as upstream

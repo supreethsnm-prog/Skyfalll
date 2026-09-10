@@ -35,6 +35,7 @@ const _rich = CurrentWeather(
   pressureHpa: 1004.2,
   dewPointC: 21.3,
   visibilityKm: 6.4,
+  uvIndex: 7.35,
 );
 
 Future<void> _pump(WidgetTester tester, Widget child) {
@@ -80,7 +81,7 @@ void main() {
         const DetailGrid(
           weather: _rich,
           foreground: AppColors.textPrimary,
-          uvIndexMax: 7.35,
+          uvIndexMax: 9.0,
           airQuality: AirQuality(observedAt: 'x', usAqi: 156, pm25: 64.8),
         ),
       );
@@ -88,10 +89,58 @@ void main() {
       expect(find.text('Feels like'), findsOneWidget);
       expect(find.text('28°'), findsOneWidget); // 27.6 rounded
       expect(find.text('UV index'), findsOneWidget);
-      expect(find.text('High'), findsOneWidget); // WHO band for 7.35
+      // The band comes from the CURRENT hour's 7.35, and the day's peak
+      // rides along explicitly labelled — never the other way round.
+      expect(find.text('High · peak 9'), findsOneWidget);
       expect(find.text('Pressure'), findsOneWidget);
       expect(find.text('Visibility'), findsOneWidget);
       expect(find.text('PM2.5'), findsOneWidget);
+    });
+
+    testWidgets(
+        'AFTER DARK — shows the current UV, never the day\'s peak',
+        (tester) async {
+      // The reported bug: at 21:09 in Dharwad the tile read "9 / Very
+      // high" because it was rendering daily uv_index_max. Current UV
+      // after sunset is 0, and that is what has to be on screen.
+      await _pump(
+        tester,
+        const DetailGrid(
+          weather: CurrentWeather(
+            temperatureC: 23.0,
+            humidityPct: 78,
+            weatherCode: 3,
+            windSpeedKmh: 8.0,
+            windDirectionDeg: 250,
+            observedAt: '2026-09-10T21:09',
+            timezone: 'Asia/Kolkata',
+            uvIndex: 0.0,
+          ),
+          foreground: AppColors.textPrimary,
+          uvIndexMax: 9.0,
+        ),
+      );
+
+      expect(find.text('UV index'), findsOneWidget);
+      expect(find.text('0'), findsOneWidget);
+      expect(find.text('Low · peak 9'), findsOneWidget);
+      expect(find.text('Very high'), findsNothing);
+      expect(find.text('9'), findsNothing);
+    });
+
+    testWidgets(
+        'omits the UV tile entirely when current UV is absent, even if a '
+        'daily peak is known — a peak is not a substitute', (tester) async {
+      await _pump(
+        tester,
+        const DetailGrid(
+          weather: _bare,
+          foreground: AppColors.textPrimary,
+          uvIndexMax: 9.0,
+        ),
+      );
+
+      expect(find.text('UV index'), findsNothing);
     });
 
     testWidgets('drops the dew-point subtitle when dew point is absent',

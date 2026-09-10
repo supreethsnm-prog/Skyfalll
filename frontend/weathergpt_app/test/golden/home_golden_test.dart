@@ -63,6 +63,8 @@ CurrentWeather _weather({int code = 63}) => CurrentWeather(
       pressureHpa: 1004.2,
       dewPointC: 21.3,
       visibilityKm: 6.4,
+      // Current-hour UV at 14:00, below the day's 7.35 peak.
+      uvIndex: 6.1,
       hourly: const [
         HourlyPoint(time: '2026-09-09T14:00', temperatureC: 24.4, weatherCode: 3),
         HourlyPoint(time: '2026-09-09T15:00', temperatureC: 25.1, weatherCode: 3),

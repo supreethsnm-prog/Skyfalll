@@ -44,6 +44,7 @@ _RESPONSE_FIELDS = (
     "pressure_hpa",
     "dew_point_c",
     "visibility_km",
+    "uv_index",
     "hourly",
 )
 
@@ -61,6 +62,7 @@ _MUTABLE_COLUMNS = (
     "pressure_hpa",
     "dew_point_c",
     "visibility_km",
+    "uv_index",
     "hourly",
 )
 
@@ -161,6 +163,7 @@ def get_weather(
             pressure_hpa=reading.pressure_hpa,
             dew_point_c=reading.dew_point_c,
             visibility_km=reading.visibility_km,
+            uv_index=reading.uv_index,
             hourly=reading.hourly,
         )
         stmt = stmt.on_conflict_do_update(
