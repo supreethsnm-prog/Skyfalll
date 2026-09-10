@@ -33,6 +33,7 @@ from app.air_quality.service import get_air_quality
 from app.forecast.service import get_forecast
 from app.geocoding.service import geocode_place, reverse_geocode_point
 from app.history.service import get_historical_weather, list_available_history
+from app.providers.climate_news import ClimateNewsProvider
 from app.providers.open_meteo_archive import OpenMeteoArchiveProvider
 from app.ingestion.alerts import ingest_alerts
 from app.ingestion.gfs import ingest_gfs_forecast
@@ -377,6 +378,21 @@ def historical_archive_endpoint(
         if previous_year_reading is not None
         else None,
     }
+
+
+@app.get("/news/climate")
+def climate_news_endpoint() -> list[dict]:
+    """Current climate/weather-disaster headlines from around the world,
+    for the Discover tab. Not safety-critical like alerts/weather, so a
+    momentary upstream hiccup returns an empty list rather than a 502 —
+    an empty Discover feed is a better failure than a crashed screen."""
+    try:
+        with ClimateNewsProvider() as provider:
+            items = provider.fetch_headlines()
+    except httpx.HTTPError as exc:
+        logger.warning("Climate news fetch failed: %s", exc)
+        return []
+    return [asdict(item) for item in items]
 
 
 class ChatRequest(BaseModel):

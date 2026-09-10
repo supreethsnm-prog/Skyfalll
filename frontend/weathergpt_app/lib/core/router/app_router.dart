@@ -1,8 +1,10 @@
 import 'package:go_router/go_router.dart';
 
 import '../../features/advisory/advisory_screen.dart';
+import '../../features/alerts/alert_history_screen.dart';
 import '../../features/aviation/aviation_screen.dart';
 import '../../features/chat/chat_screen.dart';
+import '../../features/discover/discover_screen.dart';
 import '../../features/gallery/gallery_screen.dart';
 import '../../features/historical/historical_screen.dart';
 import '../../features/home/home_screen.dart';
@@ -53,6 +55,14 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/historical',
       builder: (context, state) => const HistoricalScreen(),
+    ),
+    GoRoute(
+      path: '/discover',
+      builder: (context, state) => const DiscoverScreen(),
+    ),
+    GoRoute(
+      path: '/alerts',
+      builder: (context, state) => const AlertHistoryScreen(),
     ),
   ],
 );

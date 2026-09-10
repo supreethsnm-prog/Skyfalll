@@ -18,3 +18,4 @@ numpy>=1.26
 ecmwf-datastores-client==0.5.3
 h5netcdf==1.8.1
 h5py==3.16.0
+defusedxml==0.7.1
