@@ -179,12 +179,18 @@ class DetailGrid extends StatelessWidget {
           value: '${weather.apparentTemperatureC!.round()}°',
           sub: null,
         ),
-      if (uvIndexMax != null)
+      // UV comes from the CURRENT hour, never from the day's peak. Showing
+      // the peak here told a user in Dharwad the UV index was 9 ("Very
+      // high") at 21:09, after dark. The peak is still worth knowing, so
+      // it rides along as the subtitle where it is labelled as a peak.
+      if (weather.uvIndex != null)
         (
           icon: Icons.wb_sunny_outlined,
           label: 'UV index',
-          value: uvIndexMax!.round().toString(),
-          sub: _uvBand(uvIndexMax!),
+          value: weather.uvIndex!.round().toString(),
+          sub: uvIndexMax == null
+              ? _uvBand(weather.uvIndex!)
+              : '${_uvBand(weather.uvIndex!)} · peak ${uvIndexMax!.round()}',
         ),
       (
         icon: Icons.water_drop_outlined,

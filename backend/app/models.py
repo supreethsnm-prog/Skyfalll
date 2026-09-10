@@ -49,6 +49,7 @@ class WeatherReading(Base):
     pressure_hpa = Column(Float, nullable=True)
     dew_point_c = Column(Float, nullable=True)
     visibility_km = Column(Float, nullable=True)
+    uv_index = Column(Float, nullable=True)
 
     # Hourly series for the Home strip: a JSON array of
     # {time, temperature_c, weather_code}. It lives on this row rather than

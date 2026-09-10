@@ -10,8 +10,12 @@ IconData weatherIconFor(int weatherCode) {
   if (weatherCode >= 1 && weatherCode <= 2) return Icons.wb_cloudy_outlined;
   if (weatherCode == 3) return Icons.cloud_outlined;
   if (weatherCode == 45 || weatherCode == 48) return Icons.foggy;
-  if (weatherCode >= 51 && weatherCode <= 57) return Icons.grain;
-  if (weatherCode >= 61 && weatherCode <= 67) return Icons.water_drop_outlined;
+  // Drizzle was `Icons.grain`, whose scattered dots read as a missing
+  // glyph at forecast-row size — five drizzle days in a row looked like
+  // five rendering failures. Precipitation is now one shape at two
+  // weights: outlined for drizzle, filled for rain and showers.
+  if (weatherCode >= 51 && weatherCode <= 57) return Icons.water_drop_outlined;
+  if (weatherCode >= 61 && weatherCode <= 67) return Icons.water_drop;
   if (weatherCode >= 71 && weatherCode <= 77) return Icons.ac_unit;
   if (weatherCode >= 80 && weatherCode <= 82) return Icons.water_drop;
   if (weatherCode >= 85 && weatherCode <= 86) return Icons.ac_unit;

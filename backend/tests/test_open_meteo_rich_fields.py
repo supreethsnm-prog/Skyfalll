@@ -189,3 +189,62 @@ def test_fetch_forecast_actually_requests_uv_and_sun_times():
 
     for field in ("uv_index_max", "sunrise", "sunset"):
         assert field in seen["daily"], f"{field} missing from daily="
+
+
+# UV index is an HOURLY field, and reading it from the daily block is the
+# specific bug the tests below exist to prevent: a user in Dharwad saw "UV
+# index 9 · Very high" at 21:09, because the day's peak was being reported
+# as the current value.
+NIGHT_RESPONSE = {
+    "timezone": "Asia/Kolkata",
+    "current": {
+        # 21:09 — deliberately off the hour, so the 15-minute `current`
+        # granularity has to be matched into the on-the-hour series.
+        "time": "2026-09-10T21:09",
+        "temperature_2m": 23.0,
+        "relative_humidity_2m": 78,
+        "weather_code": 3,
+        "wind_speed_10m": 8.0,
+        "wind_direction_10m": 250,
+    },
+    "hourly": {
+        "time": ["2026-09-10T12:00", "2026-09-10T21:00"],
+        "temperature_2m": [31.0, 23.0],
+        "weather_code": [1, 3],
+        "uv_index": [9.05, 0.0],
+    },
+}
+
+
+def test_fetch_current_reads_uv_from_the_matching_hour_not_the_daily_peak():
+    reading = _provider_returning(NIGHT_RESPONSE).fetch_current(15.36, 75.12)
+
+    # 0.0 at 21:00 — NOT 9.05, the day's peak at noon.
+    assert reading.uv_index == 0.0
+
+
+def test_fetch_current_requests_uv_index_in_the_hourly_block():
+    seen = {}
+
+    def handler(request):
+        seen.update(dict(request.url.params))
+        return httpx.Response(200, json=NIGHT_RESPONSE)
+
+    OpenMeteoWeatherProvider(
+        client=httpx.Client(transport=httpx.MockTransport(handler))
+    ).fetch_current(15.36, 75.12)
+
+    assert "uv_index" in seen["hourly"]
+
+
+def test_fetch_current_leaves_uv_none_when_the_hourly_block_omits_it():
+    reading = _provider_returning(RICH_CURRENT_RESPONSE).fetch_current(28.61, 77.21)
+
+    # Absent, not zero — a "0" UV reads as a real measurement.
+    assert reading.uv_index is None
+
+
+def test_fetch_current_leaves_uv_none_when_there_is_no_hourly_block():
+    reading = _provider_returning(BARE_CURRENT_RESPONSE).fetch_current(28.61, 77.21)
+
+    assert reading.uv_index is None
