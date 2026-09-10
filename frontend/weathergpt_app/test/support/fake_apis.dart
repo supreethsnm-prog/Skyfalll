@@ -240,36 +240,49 @@ class FakeMarineApi implements MarineApi {
 
 /// Stands in for `HistoricalApi`, so any test that mounts `HistoricalScreen`
 /// (or a route tree that could reach it) does not make a live HTTP call.
-/// Defaults to an empty coverage list — a real, expected state for this
-/// endpoint (see `HistoricalCoverageEmpty`), not a placeholder — so tests
-/// that don't care about Historical specifically get a harmless, terminal
-/// state rather than a screen left spinning.
+/// Defaults to a fixed New Delhi archive reading with no year-over-year
+/// comparison — a real, common shape, not a placeholder — so tests that
+/// don't care about Historical specifically get a harmless loaded state
+/// rather than a screen left spinning.
 class FakeHistoricalApi implements HistoricalApi {
   FakeHistoricalApi({
-    this.coverage = const [],
-    this.readings = const {},
-    this.failAvailable = false,
+    this.archives = const {},
+    this.defaultArchive = const HistoricalArchive(
+      latitude: 28.61,
+      longitude: 77.21,
+      locationName: 'New Delhi, India',
+      reading: ArchiveReading(
+        date: '2024-07-15',
+        tempMaxC: 31.2,
+        tempMinC: 24.1,
+        tempMeanC: 27.4,
+        precipSumMm: 12.0,
+        windSpeedMaxKmh: 18.2,
+        windDirectionDominantDeg: 247,
+      ),
+    ),
     this.failFetch = false,
   });
 
-  List<HistoricalCoverage> coverage;
-
-  /// "location|date" -> reading. A missing key means the backend's 404
-  /// (unseeded pair), matching what the real `HistoricalApi.fetch` returns.
-  final Map<String, HistoricalReading?> readings;
-  final bool failAvailable;
+  /// "lat,lon,date" -> archive result, keyed exactly. A missing key falls
+  /// back to [defaultArchive] — set that to null to make every request 404
+  /// (mirroring the backend's "no data for this exact date" outcome)
+  /// regardless of the date `HistoricalController` happens to pick.
+  final Map<String, HistoricalArchive?> archives;
+  final HistoricalArchive? defaultArchive;
   final bool failFetch;
 
   @override
-  Future<List<HistoricalCoverage>> fetchAvailable() async {
-    if (failAvailable) throw const NetworkConnectionError();
-    return coverage;
-  }
-
-  @override
-  Future<HistoricalReading?> fetch(String location, String date) async {
+  Future<HistoricalArchive?> fetchArchive({
+    required double latitude,
+    required double longitude,
+    required String date,
+    String? name,
+  }) async {
     if (failFetch) throw const NetworkConnectionError();
-    return readings['$location|$date'];
+    final key = '$latitude,$longitude,$date';
+    if (archives.containsKey(key)) return archives[key];
+    return defaultArchive;
   }
 
   @override

@@ -48,7 +48,18 @@ class _Failed extends _SearchState {
 /// A sheet rather than a full screen: choosing a place is a quick,
 /// reversible detour, and keeping the weather visible behind it makes
 /// that obvious.
-Future<void> showLocationSearch(BuildContext context) {
+///
+/// [onSelected], when given, receives the chosen place instead of the
+/// default behaviour (changing Home's own current location) — this is how
+/// other screens (Historical, say) reuse this same search UI for "any
+/// place on Earth" without redirecting Home. [showUseMyLocation] hides the
+/// "Use my location" row for callers where "the device's current position"
+/// isn't a meaningful choice.
+Future<void> showLocationSearch(
+  BuildContext context, {
+  ValueChanged<GeocodeResult>? onSelected,
+  bool showUseMyLocation = true,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AppColors.bgBase,
@@ -58,12 +69,28 @@ Future<void> showLocationSearch(BuildContext context) {
         top: Radius.circular(AppRadius.panel),
       ),
     ),
-    builder: (_) => const LocationSearchSheet(),
+    builder: (_) => LocationSearchSheet(
+      onSelected: onSelected,
+      showUseMyLocation: showUseMyLocation,
+    ),
   );
 }
 
 class LocationSearchSheet extends ConsumerStatefulWidget {
-  const LocationSearchSheet({super.key});
+  const LocationSearchSheet({
+    super.key,
+    this.onSelected,
+    this.showUseMyLocation = true,
+  });
+
+  /// Called with the chosen place instead of the default "change Home's
+  /// location" behaviour, when given.
+  final ValueChanged<GeocodeResult>? onSelected;
+
+  /// Whether to show the "Use my location" row. Ignored (never shown) when
+  /// [onSelected] is set, since that row's default behaviour is specific to
+  /// Home's own current-location concept.
+  final bool showUseMyLocation;
 
   @override
   ConsumerState<LocationSearchSheet> createState() =>
@@ -99,7 +126,12 @@ class _LocationSearchSheetState extends ConsumerState<LocationSearchSheet> {
   }
 
   void _choose(GeocodeResult result) {
-    ref.read(homeControllerProvider.notifier).changeLocation(result);
+    final onSelected = widget.onSelected;
+    if (onSelected != null) {
+      onSelected(result);
+    } else {
+      ref.read(homeControllerProvider.notifier).changeLocation(result);
+    }
     Navigator.of(context).pop();
   }
 
@@ -143,8 +175,10 @@ class _LocationSearchSheetState extends ConsumerState<LocationSearchSheet> {
                 controller: _controller,
                 onSubmitted: _search,
               ),
-              const SizedBox(height: AppSpacing.md),
-              _UseMyLocationRow(onTap: _useDeviceLocation),
+              if (widget.onSelected == null && widget.showUseMyLocation) ...[
+                const SizedBox(height: AppSpacing.md),
+                _UseMyLocationRow(onTap: _useDeviceLocation),
+              ],
               const SizedBox(height: AppSpacing.sm),
               _Outcome(state: _state, onChoose: _choose),
             ],

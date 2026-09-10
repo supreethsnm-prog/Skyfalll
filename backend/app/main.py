@@ -6,7 +6,8 @@ import logging
 import wave
 from collections.abc import Generator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from datetime import date as date_cls
 
 import httpx
 from fastapi import (
@@ -32,6 +33,7 @@ from app.air_quality.service import get_air_quality
 from app.forecast.service import get_forecast
 from app.geocoding.service import geocode_place, reverse_geocode_point
 from app.history.service import get_historical_weather, list_available_history
+from app.providers.open_meteo_archive import OpenMeteoArchiveProvider
 from app.ingestion.alerts import ingest_alerts
 from app.ingestion.gfs import ingest_gfs_forecast
 from app.ingestion.marine import ingest_pfz_zones
@@ -317,6 +319,62 @@ def historical_weather_endpoint(
             ),
         )
     return result
+
+
+@app.get("/historical/archive")
+def historical_archive_endpoint(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    name: str | None = Query(None),
+) -> dict:
+    """Live Open-Meteo Archive reading for any location/date on Earth, plus
+    the same calendar date one year earlier for the "same day, different
+    year" comparison panel — one request in, two readings out.
+
+    Unlike `/historical` above, this is never a cache miss in the 404
+    sense: it calls the live archive API on every request rather than
+    reading a small pre-seeded table. A parse failure or an out-of-range
+    date surfaces as a 502/404 rather than silently inventing zeros.
+    """
+    try:
+        requested_date = date_cls.fromisoformat(date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid date '{date}'.")
+
+    provider = OpenMeteoArchiveProvider()
+    try:
+        reading = provider.fetch_day(lat, lon, date)
+        try:
+            previous_year_date = requested_date.replace(year=requested_date.year - 1)
+        except ValueError:
+            # Feb 29 with no Feb 29 the year before.
+            previous_year_date = requested_date.replace(
+                year=requested_date.year - 1, day=28
+            )
+        previous_year_reading = provider.fetch_day(
+            lat, lon, previous_year_date.isoformat()
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Open-Meteo archive request failed: {exc}"
+        )
+
+    if reading is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No archive data for ({lat}, {lon}) on {date}.",
+        )
+
+    return {
+        "latitude": lat,
+        "longitude": lon,
+        "location_name": name,
+        "reading": asdict(reading),
+        "previous_year_reading": asdict(previous_year_reading)
+        if previous_year_reading is not None
+        else None,
+    }
 
 
 class ChatRequest(BaseModel):

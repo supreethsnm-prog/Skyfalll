@@ -5,6 +5,23 @@ import '../../core/network/app_error.dart';
 import '../../data/geocoding_api.dart';
 import '../../data/historical_api.dart';
 
+/// New Delhi — the fallback location used until a location is chosen or
+/// Home's current location resolves. Mirrors `HomeController`'s own
+/// `_defaultLocation` fallback.
+const _defaultLocation = GeocodeResult(
+  displayName: 'New Delhi, India',
+  latitude: 28.6139,
+  longitude: 77.2090,
+  country: 'India',
+  state: 'Delhi',
+);
+
+/// Archive coverage lags the live feed by a few days — see
+/// `historicalDateBounds` below — so the default date opens on a day that
+/// is guaranteed to already have data rather than the most recent possible
+/// one.
+const _defaultDateLagDays = 10;
+
 sealed class HistoricalUiState {
   const HistoricalUiState();
 }
@@ -13,27 +30,14 @@ class HistoricalLoading extends HistoricalUiState {
   const HistoricalLoading();
 }
 
-/// The coverage list itself came back empty — the seed table is truncated
-/// by the backend's own test suite and re-seeding is expensive, so this is
-/// a real, expected state ("no historical data loaded"), not an error.
-class HistoricalCoverageEmpty extends HistoricalUiState {
-  const HistoricalCoverageEmpty();
-}
-
-/// `location`/`date` came from the coverage response, yet the lookup still
-/// 404s. Coverage should make this unreachable in practice, but the lookup
-/// is a separate request against a live table, so it is handled distinctly
-/// from [HistoricalError] rather than assumed impossible.
+/// The archive has no reading for this exact (location, date) — e.g. a
+/// date just outside real coverage. An expected outcome given free-form
+/// date entry, not an error.
 class HistoricalNotFound extends HistoricalUiState {
-  final List<HistoricalCoverage> coverage;
-  final HistoricalCoverage location;
+  final GeocodeResult location;
   final String date;
 
-  const HistoricalNotFound({
-    required this.coverage,
-    required this.location,
-    required this.date,
-  });
+  const HistoricalNotFound({required this.location, required this.date});
 }
 
 class HistoricalError extends HistoricalUiState {
@@ -42,28 +46,21 @@ class HistoricalError extends HistoricalUiState {
 }
 
 class HistoricalLoaded extends HistoricalUiState {
-  final List<HistoricalCoverage> coverage;
-  final HistoricalCoverage location;
+  final GeocodeResult location;
   final String date;
-  final HistoricalReading reading;
+  final ArchiveReading reading;
 
-  /// The other date at [location] sharing [date]'s month-and-day, if one
-  /// exists (e.g. 2024-07-15 and 2023-07-15 are both 15 July). Null when no
-  /// such pair exists — the screen must then show the single reading with
-  /// no comparison, never one built from unrelated dates.
-  final String? comparisonDate;
-  final HistoricalReading? comparisonReading;
+  /// The same calendar date one year earlier, if the archive has it.
+  final ArchiveReading? previousYearReading;
 
   const HistoricalLoaded({
-    required this.coverage,
     required this.location,
     required this.date,
     required this.reading,
-    this.comparisonDate,
-    this.comparisonReading,
+    this.previousYearReading,
   });
 
-  bool get hasComparison => comparisonReading != null;
+  bool get hasComparison => previousYearReading != null;
 }
 
 final historicalApiProvider =
@@ -73,145 +70,110 @@ final historicalControllerProvider =
     NotifierProvider<HistoricalController, HistoricalUiState>(
         HistoricalController.new);
 
-/// Loads ERA5 reanalysis coverage, then a chosen location/date within it.
+/// Any location on Earth, any date the Open-Meteo Archive covers.
 ///
-/// Mirrors `AviationController`'s shape: a `Notifier` around a sealed UI
-/// state, keeping the last-requested arguments as fields so retry does not
-/// need them re-supplied. Unlike Aviation, there is no live "nearest"
-/// concept here — [load] only PREFERS Home's current location among
-/// whatever the coverage response actually offers, and falls back to
-/// coverage's first entry when Home's location is not covered.
+/// Keeps the last-requested location/date as fields so a retry, or
+/// changing just one of the two, does not need the other re-supplied.
+/// Mirrors `AviationController`'s shape.
 class HistoricalController extends Notifier<HistoricalUiState> {
-  List<HistoricalCoverage>? _coverage;
-  HistoricalCoverage? _location;
+  GeocodeResult? _location;
   String? _date;
+
+  /// Once the user has explicitly picked a location, Home's location
+  /// resolving (or re-resolving) must never silently override that choice.
+  bool _userPickedLocation = false;
 
   @override
   HistoricalUiState build() => const HistoricalLoading();
 
-  /// Loads the full coverage list, then defaults to the entry matching
-  /// [preferredLocation] (Home's current location) when the coverage
-  /// contains it, else the first entry the backend returns. Safe to call
-  /// again — e.g. pull-to-refresh — since it always refetches coverage
-  /// rather than trying to detect a no-op, matching `AviationController`.
+  /// Loads the currently selected (or default) location/date. Safe to call
+  /// repeatedly — e.g. pull-to-refresh, or Home's location resolving after
+  /// this screen already opened — since it always re-fetches. Adopts
+  /// [preferredLocation] (Home's current location) only until the user
+  /// picks a location of their own.
   Future<void> load({GeocodeResult? preferredLocation}) async {
-    state = const HistoricalLoading();
-    try {
-      final coverage = await ref.read(historicalApiProvider).fetchAvailable();
-      _coverage = coverage;
-      if (coverage.isEmpty) {
-        _location = null;
-        _date = null;
-        state = const HistoricalCoverageEmpty();
-        return;
-      }
-      final location = _pickLocation(preferredLocation, coverage);
-      _location = location;
-      _date = location.dates.first;
-      await _loadReading();
-    } on AppError catch (e) {
-      state = HistoricalError(e);
+    if (!_userPickedLocation) {
+      _location = preferredLocation ?? _defaultLocation;
     }
+    _date ??= _defaultDate();
+    await _fetch();
   }
 
-  /// Switches to a different covered location, defaulting to its most
-  /// recent date.
-  Future<void> selectLocation(HistoricalCoverage location) {
+  /// Switches to a different location (from the location search sheet),
+  /// keeping the currently selected date.
+  Future<void> selectLocation(GeocodeResult location) {
+    _userPickedLocation = true;
     _location = location;
-    _date = location.dates.first;
-    return _loadReading();
+    _date ??= _defaultDate();
+    return _fetch();
   }
 
-  /// Switches to a different date at the currently selected location. The
-  /// date must come from that location's own coverage list — the screen
-  /// only ever offers dates from there, so this does not re-validate.
+  /// Switches to a different date (from the date picker), keeping the
+  /// currently selected location.
   Future<void> selectDate(String date) {
     _date = date;
-    return _loadReading();
+    return _fetch();
   }
 
-  /// Re-issues whatever was last requested. Falls back to a full reload
-  /// when coverage was never loaded (e.g. retrying after the initial
-  /// coverage fetch itself failed).
-  Future<void> retry() {
-    if (_coverage == null) return load();
-    return _loadReading();
-  }
+  /// Re-issues whatever was last requested.
+  Future<void> retry() => _fetch();
 
-  Future<void> _loadReading() async {
-    final coverage = _coverage;
+  Future<void> _fetch() async {
     final location = _location;
     final date = _date;
-    if (coverage == null || location == null || date == null) return;
+    if (location == null || date == null) return;
 
     state = const HistoricalLoading();
-    final api = ref.read(historicalApiProvider);
-
     try {
-      final reading = await api.fetch(location.locationName, date);
-      if (reading == null) {
-        state = HistoricalNotFound(
-          coverage: coverage,
-          location: location,
-          date: date,
-        );
+      final result = await ref.read(historicalApiProvider).fetchArchive(
+            latitude: location.latitude,
+            longitude: location.longitude,
+            date: date,
+            name: location.displayName,
+          );
+      if (result == null) {
+        state = HistoricalNotFound(location: location, date: date);
         return;
       }
-
-      final comparisonDate = _sameMonthDayPartner(location, date);
-      HistoricalReading? comparisonReading;
-      if (comparisonDate != null) {
-        // The comparison is an enhancement, not the point of the request —
-        // if fetching the partner date fails for any reason, the primary
-        // reading still shows, just without a comparison.
-        try {
-          comparisonReading =
-              await api.fetch(location.locationName, comparisonDate);
-        } catch (_) {
-          comparisonReading = null;
-        }
-      }
-
       state = HistoricalLoaded(
-        coverage: coverage,
         location: location,
         date: date,
-        reading: reading,
-        comparisonDate: comparisonReading == null ? null : comparisonDate,
-        comparisonReading: comparisonReading,
+        reading: result.reading,
+        previousYearReading: result.previousYearReading,
       );
     } on AppError catch (e) {
       state = HistoricalError(e);
     }
   }
 
-  HistoricalCoverage _pickLocation(
-    GeocodeResult? preferred,
-    List<HistoricalCoverage> coverage,
-  ) {
-    if (preferred != null) {
-      final name = preferred.displayName.toLowerCase();
-      for (final entry in coverage) {
-        if (name.contains(entry.locationName.toLowerCase())) return entry;
-      }
-    }
-    return coverage.first;
-  }
-
-  /// The other date at [location] with the same "MM-DD" suffix as [date],
-  /// if any — e.g. 2024-07-15 and 2023-07-15 are both 15 July. Dates are
-  /// ISO-8601 (`YYYY-MM-DD`), so the suffix is a plain substring; no date
-  /// parsing is needed. Returns null rather than picking an unrelated date
-  /// when no genuine same-day pair exists.
-  String? _sameMonthDayPartner(HistoricalCoverage location, String date) {
-    if (date.length != 10) return null;
-    final monthDay = date.substring(5);
-    for (final candidate in location.dates) {
-      if (candidate == date) continue;
-      if (candidate.length == 10 && candidate.substring(5) == monthDay) {
-        return candidate;
-      }
-    }
-    return null;
+  String _defaultDate() {
+    final d = DateTime.now().toUtc().subtract(
+          const Duration(days: _defaultDateLagDays),
+        );
+    return _isoDate(d);
   }
 }
+
+/// `YYYY-MM-DD` for a [DateTime], with no time-of-day component — matches
+/// the backend's date query parameter shape.
+String _isoDate(DateTime d) {
+  final y = d.year.toString().padLeft(4, '0');
+  final m = d.month.toString().padLeft(2, '0');
+  final day = d.day.toString().padLeft(2, '0');
+  return '$y-$m-$day';
+}
+
+/// `showDatePicker` bounds for the Open-Meteo Archive: it covers 1940
+/// onward, and lags the live feed by roughly 5 days, so a conservative
+/// 6-day buffer keeps every offered date from 404ing.
+({DateTime first, DateTime last}) historicalDateBounds() {
+  final now = DateTime.now().toUtc();
+  final last = DateTime(now.year, now.month, now.day).subtract(
+    const Duration(days: 6),
+  );
+  return (first: DateTime(1940, 1, 1), last: last);
+}
+
+/// Exposed for the screen's date picker, which needs the same `YYYY-MM-DD`
+/// shape [HistoricalController] sends to the backend.
+String isoDateString(DateTime d) => _isoDate(d);

@@ -5,22 +5,24 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../data/geocoding_api.dart';
 import '../../data/historical_api.dart';
 import '../../shared/error_message.dart';
 import '../../shared/widgets/round_icon_button.dart';
 import '../home/home_controller.dart';
 import '../home/weather_label.dart';
+import '../home/widgets/location_search_sheet.dart';
 import '../shell/app_drawer.dart';
 import 'historical_controller.dart';
 
-/// ERA5 reanalysis (ECMWF) readings for a small, fixed seed of locations
-/// and sample dates.
+/// Open-Meteo Archive (ECMWF ERA5/ERA5-Land reanalysis) readings for any
+/// location on Earth and any date from 1940 to a few days ago.
 ///
-/// Deliberately discovers what is available from `/historical/available`
-/// rather than guessing a location/date pair — see the docs on
-/// `HistoricalController` and `HistoricalApi`. The point of this screen is
-/// the same-month-day comparison (e.g. two 15 Julys a year apart), which a
-/// plain "today's forecast" screen has no way to show.
+/// The point of this screen is the "same day, different year" comparison
+/// (e.g. two 15 Julys a year apart), which a plain "today's forecast"
+/// screen has no way to show. "Change"/"Change date" reuse Home's own
+/// location search and a standard Material date picker rather than
+/// offering a small fixed list — see `HistoricalController`.
 class HistoricalScreen extends ConsumerStatefulWidget {
   const HistoricalScreen({super.key});
 
@@ -62,7 +64,7 @@ class _HistoricalScreenState extends ConsumerState<HistoricalScreen> {
   Widget build(BuildContext context) {
     // Catches Home settling (or failing) AFTER this screen's first frame —
     // the initState callback above only covers Home already being resolved
-    // by then. Fires the coverage load exactly once, whatever Home ends up
+    // by then. Fires the initial load exactly once, whatever Home ends up
     // doing, so this screen is never left waiting on a load nothing asked
     // for.
     ref.listen<HomeUiState>(homeControllerProvider, (previous, next) {
@@ -131,52 +133,34 @@ class _Body extends ConsumerWidget {
                 ref.read(historicalControllerProvider.notifier).retry(),
           ),
         ),
-      HistoricalCoverageEmpty() => RefreshIndicator(
+      HistoricalNotFound(:final location, :final date) => RefreshIndicator(
           onRefresh: () =>
               ref.read(historicalControllerProvider.notifier).retry(),
           color: AppColors.textPrimary,
           backgroundColor: AppColors.surfaceRaised,
-          child: const _EmptyCoverageView(),
-        ),
-      HistoricalNotFound(:final coverage, :final location, :final date) =>
-        RefreshIndicator(
-          onRefresh: () =>
-              ref.read(historicalControllerProvider.notifier).retry(),
-          color: AppColors.textPrimary,
-          backgroundColor: AppColors.surfaceRaised,
-          child: _NotFoundView(
-            coverage: coverage,
-            location: location,
-            date: date,
-            onSelectLocation: (l) =>
-                ref.read(historicalControllerProvider.notifier).selectLocation(l),
-            onSelectDate: (d) =>
-                ref.read(historicalControllerProvider.notifier).selectDate(d),
-          ),
+          child: _NotFoundView(location: location, date: date),
         ),
       HistoricalLoaded() => _LoadedView(state: state as HistoricalLoaded),
     };
   }
 }
 
-/// Location name, "Change" picker, current date, and "Change date" picker —
-/// shown above both the loaded reading and the not-found state, since both
-/// know which location and date are selected. Both pickers are driven
-/// entirely by [coverage]/[location].dates — never a hardcoded list.
+/// Location name, "Change" (Home's own location search), current date, and
+/// "Change date" (a standard Material date picker bounded to the archive's
+/// real coverage) — shown above both the loaded reading and the not-found
+/// state, since both know which location and date are selected.
 class _SelectionHeader extends StatelessWidget {
   const _SelectionHeader({
-    required this.coverage,
     required this.location,
     required this.date,
-    required this.onSelectLocation,
-    required this.onSelectDate,
+    required this.onChangeLocation,
+    required this.onChangeDate,
   });
 
-  final List<HistoricalCoverage> coverage;
-  final HistoricalCoverage location;
+  final GeocodeResult location;
   final String date;
-  final ValueChanged<HistoricalCoverage> onSelectLocation;
-  final ValueChanged<String> onSelectDate;
+  final VoidCallback onChangeLocation;
+  final VoidCallback onChangeDate;
 
   @override
   Widget build(BuildContext context) {
@@ -188,16 +172,16 @@ class _SelectionHeader extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                location.locationName,
+                location.displayName,
                 style: AppTypography.title(AppColors.textPrimary),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: AppSpacing.md),
             _ChangeButton(
               label: 'Change',
               semanticsLabel: 'Choose a different location',
-              onPressed: () =>
-                  _showLocationPicker(context, coverage, location, onSelectLocation),
+              onPressed: onChangeLocation,
             ),
           ],
         ),
@@ -215,8 +199,7 @@ class _SelectionHeader extends StatelessWidget {
             _ChangeButton(
               label: 'Change date',
               semanticsLabel: 'Choose a different date',
-              onPressed: () =>
-                  _showDatePicker(context, location.dates, date, onSelectDate),
+              onPressed: onChangeDate,
             ),
           ],
         ),
@@ -259,161 +242,53 @@ class _ChangeButton extends StatelessWidget {
   }
 }
 
-Future<void> _showLocationPicker(
-  BuildContext context,
-  List<HistoricalCoverage> coverage,
-  HistoricalCoverage selected,
-  ValueChanged<HistoricalCoverage> onSelect,
-) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: AppColors.bgBase,
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.panel)),
-    ),
-    builder: (_) => _PickerSheet<HistoricalCoverage>(
-      title: 'Choose a location',
-      items: coverage,
-      isSelected: (item) => item.locationName == selected.locationName,
-      labelFor: (item) => item.locationName,
-      onSelect: onSelect,
-    ),
+/// Opens Home's own location search sheet, rewired so a chosen place
+/// selects it for Historical rather than changing Home's own location.
+/// "Use my location" is hidden — a fixed historical date has no
+/// "current position" concept.
+void _changeLocation(BuildContext context, WidgetRef ref) {
+  showLocationSearch(
+    context,
+    onSelected: (result) =>
+        ref.read(historicalControllerProvider.notifier).selectLocation(result),
+    showUseMyLocation: false,
   );
 }
 
-Future<void> _showDatePicker(
+/// A standard Material date picker bounded to what the Open-Meteo Archive
+/// actually serves (1940-01-01 through a few days before today — see
+/// `historicalDateBounds`), so no offered date can 404.
+Future<void> _changeDate(
   BuildContext context,
-  List<String> dates,
-  String selected,
-  ValueChanged<String> onSelect,
-) {
-  return showModalBottomSheet<void>(
+  WidgetRef ref,
+  String currentDate,
+) async {
+  final bounds = historicalDateBounds();
+  final initial = _parseIsoDate(currentDate) ?? bounds.last;
+  final clampedInitial = initial.isBefore(bounds.first)
+      ? bounds.first
+      : (initial.isAfter(bounds.last) ? bounds.last : initial);
+
+  final picked = await showDatePicker(
     context: context,
-    backgroundColor: AppColors.bgBase,
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.panel)),
-    ),
-    builder: (_) => _PickerSheet<String>(
-      title: 'Choose a date',
-      items: dates,
-      isSelected: (item) => item == selected,
-      labelFor: formatHistoricalDate,
-      onSelect: onSelect,
-    ),
+    firstDate: bounds.first,
+    lastDate: bounds.last,
+    initialDate: clampedInitial,
   );
+  if (picked == null) return;
+  await ref
+      .read(historicalControllerProvider.notifier)
+      .selectDate(isoDateString(picked));
 }
 
-/// A modal bottom sheet listing [items], one radio row each. Generic over
-/// [T] so the same sheet serves both the location and date pickers, which
-/// mirror `AviationScreen`'s `showAirportPicker` in shape.
-class _PickerSheet<T> extends StatelessWidget {
-  const _PickerSheet({
-    required this.title,
-    required this.items,
-    required this.isSelected,
-    required this.labelFor,
-    required this.onSelect,
-  });
-
-  final String title;
-  final List<T> items;
-  final bool Function(T item) isSelected;
-  final String Function(T item) labelFor;
-  final ValueChanged<T> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Text(title, style: AppTypography.title(AppColors.textPrimary)),
-            const SizedBox(height: AppSpacing.md),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  for (final item in items)
-                    _PickerRow(
-                      label: labelFor(item),
-                      selected: isSelected(item),
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        onSelect(item);
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PickerRow extends StatelessWidget {
-  const _PickerRow({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: label,
-      child: ExcludeSemantics(
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppRadius.menu),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.md,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  selected
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                  size: AppRadius.iconSize,
-                  color: selected ? AppColors.accent : AppColors.textSecondary,
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Text(label, style: AppTypography.body(AppColors.textPrimary)),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+DateTime? _parseIsoDate(String isoDate) {
+  final parts = isoDate.split('-');
+  if (parts.length != 3) return null;
+  final y = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  final d = int.tryParse(parts[2]);
+  if (y == null || m == null || d == null) return null;
+  return DateTime(y, m, d);
 }
 
 class _LoadedView extends ConsumerWidget {
@@ -441,25 +316,25 @@ class _LoadedView extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _SelectionHeader(
-              coverage: state.coverage,
               location: state.location,
-              date: state.date,
-              onSelectLocation: (l) =>
-                  ref.read(historicalControllerProvider.notifier).selectLocation(l),
-              onSelectDate: (d) =>
-                  ref.read(historicalControllerProvider.notifier).selectDate(d),
+              // The backend's own `reading.date` is authoritative for
+              // display — it is what the returned figures actually
+              // describe — rather than `state.date`, the requested date
+              // used only to drive the next fetch/picker.
+              date: reading.date,
+              onChangeLocation: () => _changeLocation(context, ref),
+              onChangeDate: () => _changeDate(context, ref, state.date),
             ),
             const SizedBox(height: AppSpacing.xl),
             _StatsGrid(reading: reading),
             const SizedBox(height: AppSpacing.sm),
-            _PrecipTile(precipMm: reading.precipMm),
+            _PrecipTile(precipMm: reading.precipSumMm),
             if (state.hasComparison) ...[
               const SizedBox(height: AppSpacing.xl),
               _ComparisonSection(
-                date: state.date,
+                date: reading.date,
                 reading: reading,
-                comparisonDate: state.comparisonDate!,
-                comparisonReading: state.comparisonReading!,
+                comparisonReading: state.previousYearReading!,
               ),
             ],
             const SizedBox(height: AppSpacing.xl),
@@ -477,7 +352,7 @@ class _LoadedView extends ConsumerWidget {
 class _StatsGrid extends StatelessWidget {
   const _StatsGrid({required this.reading});
 
-  final HistoricalReading reading;
+  final ArchiveReading reading;
 
   @override
   Widget build(BuildContext context) {
@@ -488,16 +363,16 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatTile(
                 icon: Icons.thermostat,
-                label: 'Temperature',
-                value: formatHistoricalTempC(reading.temp2mC),
+                label: 'Max temperature',
+                value: formatHistoricalTempC(reading.tempMaxC),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: _StatTile(
-                icon: Icons.water_drop_outlined,
-                label: 'Dew point',
-                value: formatHistoricalTempC(reading.dewpoint2mC),
+                icon: Icons.thermostat_outlined,
+                label: 'Min temperature',
+                value: formatHistoricalTempC(reading.tempMinC),
               ),
             ),
           ],
@@ -507,19 +382,19 @@ class _StatsGrid extends StatelessWidget {
           children: [
             Expanded(
               child: _StatTile(
-                icon: Icons.speed_outlined,
-                label: 'Pressure (MSLP)',
-                value: formatPressureHpa(reading.mslpHpa),
+                icon: Icons.thermostat,
+                label: 'Mean temperature',
+                value: formatHistoricalTempC(reading.tempMeanC),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: _StatTile(
                 icon: Icons.air,
-                label: 'Wind',
+                label: 'Max wind',
                 value: formatHistoricalWind(
-                  reading.windDirection10mDeg,
-                  reading.windSpeed10mKmh,
+                  reading.windDirectionDominantDeg,
+                  reading.windSpeedMaxKmh,
                 ),
               ),
             ),
@@ -576,12 +451,10 @@ class _StatTile extends StatelessWidget {
   }
 }
 
-/// Full-width, so the hourly caveat sits directly under the number it
-/// qualifies rather than in a footnote someone can miss. This is
-/// deliberately the loudest label on the screen: mislabelling ERA5's
-/// 1-hour accumulation as a daily total would overstate a monsoon figure by
-/// more than an order of magnitude — see the doc on
-/// `HistoricalReading.precipMm`.
+/// Full-width daily precipitation total from the Open-Meteo Archive
+/// (`precipitation_sum`) — a real daily sum, unlike the old ERA5-seed
+/// path's 1-hour accumulation, so this tile no longer needs to caveat what
+/// the number means.
 class _PrecipTile extends StatelessWidget {
   const _PrecipTile({required this.precipMm});
 
@@ -589,10 +462,9 @@ class _PrecipTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final value = formatHourlyPrecipMm(precipMm);
+    final value = formatDailyPrecipMm(precipMm);
     return Semantics(
-      label:
-          'Precipitation, one hour ending 12:00 UTC: ${value ?? 'not reported'}',
+      label: 'Daily precipitation total: ${value ?? 'not reported'}',
       child: ExcludeSemantics(
         child: Container(
           width: double.infinity,
@@ -623,7 +495,7 @@ class _PrecipTile extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                '1-hour accumulation ending 12:00 UTC — not a daily total',
+                'Daily total',
                 style: AppTypography.caption(AppColors.textSecondary),
               ),
             ],
@@ -635,22 +507,19 @@ class _PrecipTile extends StatelessWidget {
 }
 
 /// The comparison that is the actual point of this screen: the selected
-/// reading against the other reading at the same location sharing its
-/// month-and-day, with the temperature difference stated plainly. Only
-/// rendered by the caller when `HistoricalLoaded.hasComparison` is true —
-/// this widget never invents a pairing of its own.
+/// reading against the reading for the same calendar date one year
+/// earlier, with the temperature difference stated plainly. Only rendered
+/// by the caller when `HistoricalLoaded.hasComparison` is true.
 class _ComparisonSection extends StatelessWidget {
   const _ComparisonSection({
     required this.date,
     required this.reading,
-    required this.comparisonDate,
     required this.comparisonReading,
   });
 
   final String date;
-  final HistoricalReading reading;
-  final String comparisonDate;
-  final HistoricalReading comparisonReading;
+  final ArchiveReading reading;
+  final ArchiveReading comparisonReading;
 
   @override
   Widget build(BuildContext context) {
@@ -675,13 +544,13 @@ class _ComparisonSection extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _ComparisonColumn(date: date, tempC: reading.temp2mC),
+                child: _ComparisonColumn(date: date, tempC: reading.tempMeanC),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: _ComparisonColumn(
-                  date: comparisonDate,
-                  tempC: comparisonReading.temp2mC,
+                  date: comparisonReading.date,
+                  tempC: comparisonReading.tempMeanC,
                 ),
               ),
             ],
@@ -698,12 +567,12 @@ class _ComparisonSection extends StatelessWidget {
   }
 
   String? _diffText() {
-    final currentTemp = reading.temp2mC;
-    final otherTemp = comparisonReading.temp2mC;
+    final currentTemp = reading.tempMeanC;
+    final otherTemp = comparisonReading.tempMeanC;
     if (currentTemp == null || otherTemp == null) return null;
 
     final currentLabel = formatHistoricalDate(date);
-    final otherLabel = formatHistoricalDate(comparisonDate);
+    final otherLabel = formatHistoricalDate(comparisonReading.date);
     final diff = currentTemp - otherTemp;
 
     if (diff.abs() < 0.05) {
@@ -742,67 +611,14 @@ class _ComparisonColumn extends StatelessWidget {
   }
 }
 
-class _EmptyCoverageView extends StatelessWidget {
-  const _EmptyCoverageView();
+class _NotFoundView extends ConsumerWidget {
+  const _NotFoundView({required this.location, required this.date});
 
-  @override
-  Widget build(BuildContext context) {
-    // An empty coverage list is a real, expected state — the seed table is
-    // truncated by the backend's own test suite and re-seeding is
-    // expensive — never an error.
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      child: Container(
-        constraints: BoxConstraints(
-          minHeight: MediaQuery.of(context).size.height * 0.6,
-        ),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.history_toggle_off,
-              size: 40,
-              color: AppColors.textSecondary,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              'No historical data loaded',
-              style: AppTypography.title(AppColors.textPrimary),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'The ERA5 archive has no seeded locations right now. Pull to '
-              'refresh once it does.',
-              style: AppTypography.label(AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NotFoundView extends StatelessWidget {
-  const _NotFoundView({
-    required this.coverage,
-    required this.location,
-    required this.date,
-    required this.onSelectLocation,
-    required this.onSelectDate,
-  });
-
-  final List<HistoricalCoverage> coverage;
-  final HistoricalCoverage location;
+  final GeocodeResult location;
   final String date;
-  final ValueChanged<HistoricalCoverage> onSelectLocation;
-  final ValueChanged<String> onSelectDate;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(
@@ -815,11 +631,10 @@ class _NotFoundView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SelectionHeader(
-            coverage: coverage,
             location: location,
             date: date,
-            onSelectLocation: onSelectLocation,
-            onSelectDate: onSelectDate,
+            onChangeLocation: () => _changeLocation(context, ref),
+            onChangeDate: () => _changeDate(context, ref, date),
           ),
           const SizedBox(height: AppSpacing.xxxl),
           Center(
@@ -835,13 +650,13 @@ class _NotFoundView extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   Text(
-                    'No ERA5 reading for this date',
+                    'No archive reading for this date',
                     style: AppTypography.title(AppColors.textPrimary),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'Try a different date or location from the pickers above.',
+                    'Try a different date or location above.',
                     style: AppTypography.label(AppColors.textSecondary),
                     textAlign: TextAlign.center,
                   ),
@@ -921,19 +736,17 @@ class _ErrorView extends StatelessWidget {
 String? formatHistoricalTempC(double? celsius) =>
     celsius == null ? null : '${celsius.toStringAsFixed(1)}°C';
 
-/// Mean sea-level pressure, rounded to the nearest hPa.
-String? formatPressureHpa(double? hpa) =>
-    hpa == null ? null : '${hpa.round()} hPa';
-
-/// ERA5's 1-hour accumulation ending at 12:00 UTC, to two decimal places —
-/// NOT a daily total. See the doc on `HistoricalReading.precipMm`.
-String? formatHourlyPrecipMm(double? mm) =>
-    mm == null ? null : '${mm.toStringAsFixed(2)} mm';
+/// A daily precipitation total (`precipitation_sum`), to one decimal
+/// place. Unlike the old ERA5-seed path, this IS a real daily total — no
+/// caveat needed.
+String? formatDailyPrecipMm(double? mm) =>
+    mm == null ? null : '${mm.toStringAsFixed(1)} mm';
 
 /// Cardinal direction (via `windDirectionLabel`) + speed in km/h — already
-/// the unit ERA5 reports in, so unlike Aviation's METAR knots this needs no
-/// conversion. Direction and speed are independently nullable, so each
-/// degrades on its own rather than either hiding a value the other has.
+/// the unit Open-Meteo reports in, so unlike Aviation's METAR knots this
+/// needs no conversion. Direction and speed are independently nullable, so
+/// each degrades on its own rather than either hiding a value the other
+/// has.
 String? formatHistoricalWind(double? directionDeg, double? speedKmh) {
   final direction =
       directionDeg == null ? null : windDirectionLabel(directionDeg);
