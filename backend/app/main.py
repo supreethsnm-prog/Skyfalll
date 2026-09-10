@@ -31,7 +31,7 @@ from app.db import check_db_connection
 from app.air_quality.service import get_air_quality
 from app.forecast.service import get_forecast
 from app.geocoding.service import geocode_place, reverse_geocode_point
-from app.history.service import get_historical_weather
+from app.history.service import get_historical_weather, list_available_history
 from app.ingestion.alerts import ingest_alerts
 from app.ingestion.gfs import ingest_gfs_forecast
 from app.ingestion.marine import ingest_pfz_zones
@@ -287,6 +287,18 @@ def nwp_forecast_endpoint(
     lon: float = Query(..., ge=-180, le=180),
 ) -> list[dict]:
     return get_nwp_forecast(lat, lon)
+
+
+@app.get("/historical/available")
+def historical_available_endpoint() -> list[dict]:
+    """What the historical dataset actually covers.
+
+    `/historical` matches an exact location name and date against a small
+    fixed seed matrix, so without this a client can only guess and collect
+    404s. Declared BEFORE `/historical` so the literal path is matched
+    first — FastAPI resolves in declaration order.
+    """
+    return list_available_history()
 
 
 @app.get("/historical")

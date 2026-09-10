@@ -42,3 +42,49 @@ def get_historical_weather(location_name: str, observation_date: str) -> dict | 
     if row is None:
         return None
     return _to_response(row)
+
+
+def list_available_history() -> list[dict]:
+    """Every (location, date) pair that actually has a reading.
+
+    `get_historical_weather` matches an EXACT location name and date, and
+    the seed matrix is small and fixed — so without this a client has no
+    way to know what to ask for, and can only guess and collect 404s. That
+    made the whole endpoint effectively undiscoverable.
+
+    Grouped by location so a UI can offer a place, then the dates it holds,
+    which is the order a person actually chooses in. Dates are sorted
+    newest first; ISO-8601 strings sort chronologically as text, so no
+    parsing is needed.
+    """
+    with get_engine().connect() as conn:
+        rows = (
+            conn.execute(
+                select(
+                    HistoricalWeatherReading.location_name,
+                    HistoricalWeatherReading.observation_date,
+                    HistoricalWeatherReading.latitude,
+                    HistoricalWeatherReading.longitude,
+                ).order_by(
+                    HistoricalWeatherReading.location_name,
+                    HistoricalWeatherReading.observation_date.desc(),
+                )
+            )
+            .mappings()
+            .all()
+        )
+
+    grouped: dict[str, dict] = {}
+    for row in rows:
+        entry = grouped.setdefault(
+            row["location_name"],
+            {
+                "location_name": row["location_name"],
+                "latitude": row["latitude"],
+                "longitude": row["longitude"],
+                "dates": [],
+            },
+        )
+        entry["dates"].append(row["observation_date"])
+
+    return list(grouped.values())
