@@ -7,6 +7,14 @@ from app.forecast.service import get_forecast
 from app.models import WeatherForecast
 from app.providers.weather import ForecastDayData
 
+# Forecast dates MUST be relative to today. The service filters
+# `forecast_date >= today`, so a hardcoded date silently rots into the
+# past and the test starts failing on a day when nobody changed anything
+# — which is exactly what happened to these tests.
+_TODAY = date.today().isoformat()
+_TOMORROW = (date.today() + timedelta(days=1)).isoformat()
+
+
 
 class _FakeForecastProvider:
     def __init__(self, days: list[ForecastDayData]):
@@ -18,7 +26,8 @@ class _FakeForecastProvider:
         return self._days
 
 
-def _sample_day(forecast_date="2026-09-08", temp_max_c=29.0):
+def _sample_day(forecast_date=None, temp_max_c=29.0):
+    forecast_date = forecast_date or _TODAY
     return ForecastDayData(
         latitude=19.08, longitude=72.88, forecast_date=forecast_date, weather_code=51,
         temp_max_c=temp_max_c, temp_min_c=25.0, precip_probability_pct=90.0,
@@ -48,7 +57,7 @@ def test_get_forecast_returns_fresh_cache_without_calling_provider(clean_weather
     with get_engine().begin() as conn:
         conn.execute(
             insert(WeatherForecast).values(
-                latitude=19.08, longitude=72.88, forecast_date="2026-09-08", weather_code=51,
+                latitude=19.08, longitude=72.88, forecast_date=_TODAY, weather_code=51,
                 temp_max_c=30.0, temp_min_c=25.0, precip_probability_pct=50.0,
                 precip_sum_mm=1.0, wind_speed_max_kmh=10.0, raw_payload={"seeded": True},
                 fetched_at=datetime.now(timezone.utc),
@@ -69,7 +78,7 @@ def test_get_forecast_refetches_when_cache_is_stale(clean_weather_forecasts):
     with get_engine().begin() as conn:
         conn.execute(
             insert(WeatherForecast).values(
-                latitude=19.08, longitude=72.88, forecast_date="2026-09-08", weather_code=51,
+                latitude=19.08, longitude=72.88, forecast_date=_TODAY, weather_code=51,
                 temp_max_c=10.0, temp_min_c=5.0, precip_probability_pct=50.0,
                 precip_sum_mm=1.0, wind_speed_max_kmh=10.0, raw_payload={"stale": True},
                 fetched_at=stale_time,
@@ -105,7 +114,7 @@ class _RaisingForecastProvider:
 def test_get_forecast_falls_back_to_full_stale_cache_on_provider_error(clean_weather_forecasts):
     stale_time = datetime.now(timezone.utc) - timedelta(minutes=30)
     with get_engine().begin() as conn:
-        for forecast_date, temp_max_c in (("2026-09-08", 20.0), ("2026-09-09", 21.0)):
+        for forecast_date, temp_max_c in ((_TODAY, 20.0), (_TOMORROW, 21.0)):
             conn.execute(
                 insert(WeatherForecast).values(
                     latitude=19.08, longitude=72.88, forecast_date=forecast_date, weather_code=51,
@@ -118,7 +127,7 @@ def test_get_forecast_falls_back_to_full_stale_cache_on_provider_error(clean_wea
     result = get_forecast(19.08, 72.88, days=2, provider=_RaisingForecastProvider())
 
     assert len(result) == 2
-    assert {r["forecast_date"] for r in result} == {"2026-09-08", "2026-09-09"}
+    assert {r["forecast_date"] for r in result} == {_TODAY, _TOMORROW}
 
 
 def test_get_forecast_falls_back_to_partial_stale_cache_on_provider_error(clean_weather_forecasts):
@@ -126,7 +135,7 @@ def test_get_forecast_falls_back_to_partial_stale_cache_on_provider_error(clean_
     with get_engine().begin() as conn:
         conn.execute(
             insert(WeatherForecast).values(
-                latitude=19.08, longitude=72.88, forecast_date="2026-09-08", weather_code=51,
+                latitude=19.08, longitude=72.88, forecast_date=_TODAY, weather_code=51,
                 temp_max_c=20.0, temp_min_c=15.0, precip_probability_pct=50.0,
                 precip_sum_mm=1.0, wind_speed_max_kmh=10.0, raw_payload={"stale": True},
                 fetched_at=stale_time,
@@ -136,12 +145,12 @@ def test_get_forecast_falls_back_to_partial_stale_cache_on_provider_error(clean_
     result = get_forecast(19.08, 72.88, days=3, provider=_RaisingForecastProvider())
 
     assert len(result) == 1
-    assert result[0]["forecast_date"] == "2026-09-08"
+    assert result[0]["forecast_date"] == _TODAY
 
 
 def test_get_forecast_upserts_multiple_days_without_duplicating(clean_weather_forecasts):
-    day1 = _sample_day(forecast_date="2026-09-08", temp_max_c=29.0)
-    day2 = _sample_day(forecast_date="2026-09-09", temp_max_c=30.0)
+    day1 = _sample_day(forecast_date=_TODAY, temp_max_c=29.0)
+    day2 = _sample_day(forecast_date=_TOMORROW, temp_max_c=30.0)
     provider = _FakeForecastProvider([day1, day2])
 
     get_forecast(19.08, 72.88, days=2, provider=provider)
@@ -150,7 +159,7 @@ def test_get_forecast_upserts_multiple_days_without_duplicating(clean_weather_fo
     result = get_forecast(19.08, 72.88, days=2, provider=_FakeForecastProvider([day1, day2]))
 
     assert len(result) == 2
-    assert {r["forecast_date"] for r in result} == {"2026-09-08", "2026-09-09"}
+    assert {r["forecast_date"] for r in result} == {_TODAY, _TOMORROW}
 
     with get_engine().connect() as conn:
         rows = conn.execute(

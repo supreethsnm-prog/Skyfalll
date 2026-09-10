@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import insert
@@ -7,6 +7,10 @@ from app.db import get_engine
 from app.main import app
 from app.models import WeatherForecast
 
+# See the note in test_forecast_service.py: the service filters
+# forecast_date >= today, so a hardcoded date rots.
+_TODAY = date.today().isoformat()
+
 client = TestClient(app)
 
 
@@ -14,7 +18,7 @@ def test_forecast_endpoint_returns_cached_days(clean_weather_forecasts):
     with get_engine().begin() as conn:
         conn.execute(
             insert(WeatherForecast).values(
-                latitude=19.08, longitude=72.88, forecast_date="2026-09-08", weather_code=51,
+                latitude=19.08, longitude=72.88, forecast_date=_TODAY, weather_code=51,
                 temp_max_c=29.0, temp_min_c=25.0, precip_probability_pct=90.0,
                 precip_sum_mm=3.0, wind_speed_max_kmh=14.0, raw_payload={"seeded": True},
                 fetched_at=datetime.now(timezone.utc),
