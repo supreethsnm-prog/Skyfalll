@@ -34,65 +34,38 @@ Future<void> _loadMaterialIconsFontBestEffort() async {
   await loader.load();
 }
 
-/// The REAL seeded ERA5 values, taken verbatim from the live endpoint,
-/// including their full float precision — so the golden also proves the
-/// screen rounds for display rather than printing 25.378503417968773.
-///
-/// Pune on 15 July in two consecutive years is the comparison this screen
-/// exists for.
+/// A real Open-Meteo Archive shape (Pune, two consecutive 15 Julys) — the
+/// comparison this screen exists for.
 class _RealHistoricalApi implements HistoricalApi {
   @override
-  Future<List<HistoricalCoverage>> fetchAvailable() async => const [
-        HistoricalCoverage(
-          locationName: 'Bhagalpur',
-          latitude: 25.27,
-          longitude: 87.23,
-          dates: ['2024-07-15', '2024-01-15', '2023-07-15'],
-        ),
-        HistoricalCoverage(
-          locationName: 'New Delhi',
-          latitude: 28.61,
-          longitude: 77.21,
-          dates: ['2024-07-15', '2024-01-15', '2023-07-15'],
-        ),
-        HistoricalCoverage(
-          locationName: 'Pune',
-          latitude: 18.52,
-          longitude: 73.86,
-          dates: ['2024-07-15', '2024-01-15', '2023-07-15'],
-        ),
-      ];
-
-  @override
-  Future<HistoricalReading?> fetch(String location, String date) async {
-    // Echoes the requested location so the fixture cannot contradict the
-    // selector — the values below are Pune's real readings, used for any
-    // location purely so the golden shows a genuine year-over-year pair.
-    if (date == '2023-07-15') {
-      return HistoricalReading(
-        locationName: location,
-        latitude: 18.52,
-        longitude: 73.86,
-        observationDate: '2023-07-15',
-        temp2mC: 23.9114990234375,
-        dewpoint2mC: 22.1039306640625,
-        precipMm: 1.4305114746093750,
-        windSpeed10mKmh: 14.204212951660156,
-        windDirection10mDeg: 251.4013671875,
-        mslpHpa: 1000.4127,
-      );
-    }
-    return HistoricalReading(
-      locationName: location,
+  Future<HistoricalArchive?> fetchArchive({
+    required double latitude,
+    required double longitude,
+    required String date,
+    String? name,
+  }) async {
+    return const HistoricalArchive(
       latitude: 18.52,
       longitude: 73.86,
-      observationDate: '2024-07-15',
-      temp2mC: 25.378503417968773,
-      dewpoint2mC: 22.637597656250023,
-      precipMm: 0.18262863159179688,
-      windSpeed10mKmh: 8.732189204079713,
-      windDirection10mDeg: 262.86885893510464,
-      mslpHpa: 1001.87625,
+      locationName: 'Pune, Maharashtra',
+      reading: ArchiveReading(
+        date: '2024-07-15',
+        tempMaxC: 29.7,
+        tempMinC: 22.3,
+        tempMeanC: 25.4,
+        precipSumMm: 18.3,
+        windSpeedMaxKmh: 22.6,
+        windDirectionDominantDeg: 262.9,
+      ),
+      previousYearReading: ArchiveReading(
+        date: '2023-07-15',
+        tempMaxC: 28.1,
+        tempMinC: 20.9,
+        tempMeanC: 23.9,
+        precipSumMm: 6.4,
+        windSpeedMaxKmh: 18.9,
+        windDirectionDominantDeg: 251.4,
+      ),
     );
   }
 
@@ -131,8 +104,8 @@ Future<void> _pump(WidgetTester tester) async {
     ),
   );
 
-  // Coverage loads, then a reading, then its comparison. Fixed pumps:
-  // the loading spinner is indeterminate.
+  // Home resolves, then the archive reading loads. Fixed pumps: the
+  // loading spinner is indeterminate.
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
   await tester.pump(const Duration(milliseconds: 500));
