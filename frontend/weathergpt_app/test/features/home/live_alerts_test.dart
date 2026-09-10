@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
+import 'package:weathergpt_app/data/nwp_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
 
@@ -66,6 +67,16 @@ class _NoFix implements DeviceLocation {
       const LocationUnavailable(LocationFailure.permissionDenied);
 }
 
+/// `_load` now fetches NWP alongside weather/alerts. Left unmocked, this
+/// provider would build a real Dio against an unreachable host.
+class _FakeNwpApi implements NwpApi {
+  @override
+  Future<List<NwpPoint>> fetchForecast(double lat, double lon) async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
 Future<HomeController> _loadedController({
   List<AlertSummary> initial = const [],
 }) async {
@@ -73,6 +84,7 @@ Future<HomeController> _loadedController({
     overrides: [
       weatherApiProvider.overrideWithValue(_FakeWeatherApi()),
       alertsApiProvider.overrideWithValue(_FakeAlertsApi(initial)),
+      nwpApiProvider.overrideWithValue(_FakeNwpApi()),
       deviceLocationProvider.overrideWithValue(const _NoFix()),
     ],
   );
@@ -169,6 +181,7 @@ void main() {
       overrides: [
         weatherApiProvider.overrideWithValue(_FakeWeatherApi()),
         alertsApiProvider.overrideWithValue(_FakeAlertsApi()),
+        nwpApiProvider.overrideWithValue(_FakeNwpApi()),
         deviceLocationProvider.overrideWithValue(const _NoFix()),
       ],
     );

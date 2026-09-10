@@ -6,6 +6,7 @@ import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/alerts_socket.dart';
+import 'package:weathergpt_app/data/nwp_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/advisory/advisory_controller.dart';
 import 'package:weathergpt_app/features/chat/conversation_store.dart';
@@ -61,6 +62,43 @@ class FakeAirQualityApi implements AirQualityApi {
       pm25: 64.8,
       pm10: 118.2,
     );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
+
+/// Stands in for `NwpApi`. Returns the single sample point from the
+/// verified backend contract (`.superpowers/sdd/nwp-brief.md`) — a
+/// realistic, common shape, not a placeholder — since `HomeController`
+/// now fetches NWP alongside weather/forecast/alerts on every load.
+/// Without this override, an unmocked `nwpApiProvider` builds a real Dio
+/// against AppEnv's unreachable default host, and Home's exemption for a
+/// failed NWP call (see `HomeController._load`) means the load succeeds
+/// anyway — but only after sitting on a doomed socket for the full
+/// connect timeout.
+class FakeNwpApi implements NwpApi {
+  @override
+  Future<List<NwpPoint>> fetchForecast(double lat, double lon) async {
+    return const [
+      NwpPoint(
+        runDate: '20260909',
+        runHour: '18',
+        forecastHour: 0,
+        validTime: '2026-09-09T18:00:00Z',
+        temp2mC: 32.09,
+        relativeHumidity2mPct: 40.9,
+        windSpeed10mKmh: 5.8,
+        windDirection10mDeg: 233.67,
+        windGustKmh: 9.42,
+        precipRateMmh: 0.0,
+        capeJPerKg: 0.0,
+        cinJPerKg: -0.29,
+        cloudCoverPct: 0.0,
+        mslpHpa: 1005.99,
+      ),
+    ];
   }
 
   @override
@@ -210,6 +248,7 @@ final fakeApiOverrides = [
   weatherApiProvider.overrideWithValue(FakeWeatherApi()),
   alertsApiProvider.overrideWithValue(FakeAlertsApi()),
   airQualityApiProvider.overrideWithValue(FakeAirQualityApi()),
+  nwpApiProvider.overrideWithValue(FakeNwpApi()),
   advisoryApiProvider.overrideWithValue(FakeAdvisoryApi()),
   deviceLocationProvider.overrideWithValue(const FakeDeviceLocation()),
   geocodingApiProvider.overrideWithValue(const FakeGeocodingApi()),

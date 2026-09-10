@@ -12,6 +12,7 @@ import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/alerts_socket.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
+import 'package:weathergpt_app/data/nwp_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
 import 'package:weathergpt_app/features/saved/saved_places_controller.dart';
@@ -153,6 +154,79 @@ class _FakeAirQualityApi implements AirQualityApi {
 
 /// Pins the hero's place name so goldens never depend on a live
 /// reverse-geocode call.
+/// Empty, so these pre-existing goldens keep rendering exactly as they did
+/// before the severe-weather panel existed — an empty `/nwp` array hides
+/// the panel, same as no ingestion having run yet. Left unmocked, this
+/// provider would build a real Dio against an unreachable host and every
+/// golden here would sit on a doomed socket.
+/// A real-shaped GFS window with a convective build-up: CAPE rising into
+/// the "Strong" band on day 3 and a gale-force gust, so the severe-weather
+/// panel's bands and flags are actually visible in a golden rather than
+/// only asserted in a widget test.
+class _StormyNwpApi implements NwpApi {
+  @override
+  Future<List<NwpPoint>> fetchForecast(double lat, double lon) async => const [
+        NwpPoint(
+          runDate: '20260910',
+          runHour: '00',
+          forecastHour: 0,
+          validTime: '2026-09-10T00:00:00Z',
+          temp2mC: 29.8,
+          windSpeed10mKmh: 12.4,
+          windGustKmh: 21.0,
+          precipRateMmh: 0.0,
+          capeJPerKg: 240,
+          cinJPerKg: -12.4,
+          cloudCoverPct: 18,
+          mslpHpa: 1006.2,
+        ),
+        NwpPoint(
+          runDate: '20260910',
+          runHour: '00',
+          forecastHour: 24,
+          validTime: '2026-09-11T00:00:00Z',
+          temp2mC: 31.1,
+          windGustKmh: 34.0,
+          capeJPerKg: 1180,
+          cinJPerKg: -40.2,
+          cloudCoverPct: 55,
+          mslpHpa: 1004.0,
+        ),
+        NwpPoint(
+          runDate: '20260910',
+          runHour: '00',
+          forecastHour: 48,
+          validTime: '2026-09-12T00:00:00Z',
+          temp2mC: 30.4,
+          windGustKmh: 68.0,
+          capeJPerKg: 2870,
+          cinJPerKg: -18.0,
+          cloudCoverPct: 88,
+          mslpHpa: 999.4,
+        ),
+        NwpPoint(
+          runDate: '20260910',
+          runHour: '00',
+          forecastHour: 72,
+          validTime: '2026-09-13T00:00:00Z',
+          temp2mC: 28.9,
+          windGustKmh: 41.0,
+          capeJPerKg: 900,
+          cinJPerKg: -30.0,
+          cloudCoverPct: 70,
+          mslpHpa: 1002.1,
+        ),
+      ];
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+class _FakeNwpApi implements NwpApi {
+  @override
+  Future<List<NwpPoint>> fetchForecast(double lat, double lon) async => const [];
+}
+
 class _FixedGeocoding implements GeocodingApi {
   @override
   Future<GeocodeResult?> reverse(double lat, double lon) async =>
@@ -213,6 +287,10 @@ Future<void> _pumpHome(
   int code = 63,
   List<AlertSummary> alerts = const [],
   bool fail = false,
+  // Most goldens use an empty NWP window so the panel hides and they stay
+  // comparable with the pre-panel images; this opts one of them into a
+  // real convective build-up so the panel is actually reviewable.
+  bool stormy = false,
   // Home scrolls past a phone viewport. A taller surface renders the whole
   // page into one image for design review and for the pitch deck; the
   // default height is a real phone, showing what actually fits on screen.
@@ -231,6 +309,9 @@ Future<void> _pumpHome(
         alertsApiProvider.overrideWithValue(_FakeAlertsApi(alerts: alerts)),
         airQualityApiProvider
             .overrideWithValue(_FakeAirQualityApi(fail: fail)),
+        nwpApiProvider.overrideWithValue(
+          stormy ? _StormyNwpApi() : _FakeNwpApi(),
+        ),
         // Pinned so goldens never depend on a real device fix, and so the
         // hero always renders the same place name.
         deviceLocationProvider.overrideWithValue(_FixedLocation()),
@@ -295,6 +376,21 @@ void main() {
     await expectLater(
       find.byType(HomeScreen),
       matchesGoldenFile('goldens/home_full.png'),
+    );
+  });
+
+  testWidgets('home — severe weather window', (tester) async {
+    await _pumpHome(
+      tester,
+      now: DateTime(2026, 9, 10, 11),
+      code: 95,
+      stormy: true,
+      height: 1750,
+    );
+
+    await expectLater(
+      find.byType(HomeScreen),
+      matchesGoldenFile('goldens/home_severe.png'),
     );
   });
 

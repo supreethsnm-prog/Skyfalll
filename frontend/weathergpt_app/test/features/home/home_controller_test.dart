@@ -4,6 +4,7 @@ import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/core/network/app_error.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
+import 'package:weathergpt_app/data/nwp_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
 
@@ -83,9 +84,31 @@ class FakeAlertsApi implements AlertsApi {
   Future<List<AlertSummary>> fetchAlerts() async => nextAlerts;
 }
 
+const _sampleNwp = [
+  NwpPoint(
+    runDate: '20260909',
+    runHour: '18',
+    forecastHour: 0,
+    validTime: '2026-09-09T18:00:00Z',
+    capeJPerKg: 1500,
+  ),
+];
+
+class FakeNwpApi implements NwpApi {
+  List<NwpPoint> nextNwp = _sampleNwp;
+  Object? nextNwpError;
+
+  @override
+  Future<List<NwpPoint>> fetchForecast(double lat, double lon) async {
+    if (nextNwpError != null) throw nextNwpError!;
+    return nextNwp;
+  }
+}
+
 void main() {
   late FakeWeatherApi fakeWeatherApi;
   late FakeAlertsApi fakeAlertsApi;
+  late FakeNwpApi fakeNwpApi;
   late ProviderContainer container;
 
   // Declared here rather than in test/support so these tests stay
@@ -94,10 +117,12 @@ void main() {
   setUp(() {
     fakeWeatherApi = FakeWeatherApi()..nextWeather = _sampleWeather;
     fakeAlertsApi = FakeAlertsApi()..nextAlerts = [_nearbyAlert, _farAlert, _noCoordsAlert];
+    fakeNwpApi = FakeNwpApi();
     container = ProviderContainer(
       overrides: [
         weatherApiProvider.overrideWithValue(fakeWeatherApi),
         alertsApiProvider.overrideWithValue(fakeAlertsApi),
+        nwpApiProvider.overrideWithValue(fakeNwpApi),
         // loadInitial() now asks the device for its position first. These
         // tests are about the fetch-and-filter logic, not location, so
         // the device reports no fix and the controller falls back to its
@@ -172,5 +197,42 @@ void main() {
     await container.read(homeControllerProvider.notifier).retry();
 
     expect(container.read(homeControllerProvider), isA<HomeLoaded>());
+  });
+
+  group('NWP exemption', () {
+    // Mirrors the air-quality exemption already covered above: NWP is a
+    // different data source than weather/forecast/alerts, and its outage
+    // must not blank an otherwise-working weather screen.
+
+    test('loadInitial populates nwp when the call succeeds', () async {
+      await container.read(homeControllerProvider.notifier).loadInitial();
+
+      final loaded = container.read(homeControllerProvider) as HomeLoaded;
+      expect(loaded.nwp, _sampleNwp);
+    });
+
+    test('a failing NWP call does NOT fail the Home screen', () async {
+      fakeNwpApi.nextNwpError = const NetworkTimeoutError();
+
+      await container.read(homeControllerProvider.notifier).loadInitial();
+
+      final state = container.read(homeControllerProvider);
+      expect(state, isA<HomeLoaded>());
+      final loaded = state as HomeLoaded;
+      // The screen still has real weather — NWP just leaves its own field
+      // null rather than taking down the whole load.
+      expect(loaded.weather.temperatureC, 32.0);
+      expect(loaded.nwp, isNull);
+    });
+
+    test('an empty NWP array is not an error — ingestion has not run yet',
+        () async {
+      fakeNwpApi.nextNwp = const [];
+
+      await container.read(homeControllerProvider.notifier).loadInitial();
+
+      final loaded = container.read(homeControllerProvider) as HomeLoaded;
+      expect(loaded.nwp, isEmpty);
+    });
   });
 }

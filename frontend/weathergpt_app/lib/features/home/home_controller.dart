@@ -7,6 +7,7 @@ import '../../data/air_quality_api.dart';
 import '../../data/alerts_socket.dart';
 import '../../data/alerts_api.dart';
 import '../../data/geocoding_api.dart';
+import '../../data/nwp_api.dart';
 import '../../data/weather_api.dart';
 
 /// New Delhi — the FALLBACK location, used when the device's own
@@ -47,12 +48,22 @@ class HomeLoaded extends HomeUiState {
   /// screen — see the note in [HomeController._load].
   final AirQuality? airQuality;
 
+  /// Null when the NWP (NOAA GFS numerical weather prediction) call failed,
+  /// OR when it succeeded with an empty array — `/nwp` reads from a table
+  /// filled by scheduled ingestion, and an empty result is that ingestion's
+  /// honest "nothing yet", not an error. Deliberately optional for the same
+  /// reason [airQuality] is: a different upstream source, whose absence
+  /// must not fail an otherwise-working weather screen — see the note in
+  /// [HomeController._load].
+  final List<NwpPoint>? nwp;
+
   const HomeLoaded({
     required this.location,
     required this.weather,
     required this.forecast,
     required this.nearbyAlerts,
     this.airQuality,
+    this.nwp,
     this.locationFailure,
   });
 }
@@ -68,6 +79,7 @@ final alertsApiProvider = Provider<AlertsApi>((ref) => AlertsApi(buildApiClient(
 final geocodingApiProvider = Provider<GeocodingApi>((ref) => GeocodingApi(buildApiClient()));
 final airQualityApiProvider =
     Provider<AirQualityApi>((ref) => AirQualityApi(buildApiClient()));
+final nwpApiProvider = Provider<NwpApi>((ref) => NwpApi(buildApiClient()));
 
 /// Live alert push. Kept alive for the app's lifetime rather than per
 /// screen, so the connection survives navigation, and disposed with the
@@ -145,6 +157,7 @@ class HomeController extends Notifier<HomeUiState> {
       // Newest first: a warning that just arrived is the one to read.
       nearbyAlerts: [...relevant, ...current.nearbyAlerts],
       airQuality: current.airQuality,
+      nwp: current.nwp,
       locationFailure: current.locationFailure,
     );
 
@@ -198,6 +211,7 @@ class HomeController extends Notifier<HomeUiState> {
     final weatherApi = ref.read(weatherApiProvider);
     final alertsApi = ref.read(alertsApiProvider);
     final airQualityApi = ref.read(airQualityApiProvider);
+    final nwpApi = ref.read(nwpApiProvider);
 
     // Air quality is fetched alongside the others but is deliberately
     // EXEMPT from this controller's otherwise all-or-nothing rule: it
@@ -207,6 +221,18 @@ class HomeController extends Notifier<HomeUiState> {
     final airQualityFuture = airQualityApi
         .fetchCurrent(location.latitude, location.longitude)
         .then<AirQuality?>((value) => value)
+        .catchError((_) => null);
+
+    // NWP (NOAA GFS numerical weather prediction) gets the SAME exemption
+    // as air quality above, for the same reason: it is a different data
+    // source than the core weather/forecast/alerts trio, so its outage
+    // must not blank an otherwise-working screen. A failure here leaves
+    // nwp null; the severe-weather panel treats that identically to a
+    // successful-but-empty `/nwp` response (ingestion has not run yet) and
+    // simply does not render.
+    final nwpFuture = nwpApi
+        .fetchForecast(location.latitude, location.longitude)
+        .then<List<NwpPoint>?>((value) => value)
         .catchError((_) => null);
 
     try {
@@ -237,6 +263,7 @@ class HomeController extends Notifier<HomeUiState> {
         forecast: forecast,
         nearbyAlerts: nearbyAlerts,
         airQuality: await airQualityFuture,
+        nwp: await nwpFuture,
         locationFailure: _locationFailure,
       );
     } on AppError catch (e) {

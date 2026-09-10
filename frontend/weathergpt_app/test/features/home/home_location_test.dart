@@ -4,6 +4,7 @@ import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
+import 'package:weathergpt_app/data/nwp_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
 
@@ -100,6 +101,17 @@ class _FakeAirQualityApi implements AirQualityApi {
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
+/// Same reasoning as [_FakeAirQualityApi]: `_load` now fetches NWP
+/// alongside the others too, and an unmocked provider would build a real
+/// Dio against an unreachable host.
+class _FakeNwpApi implements NwpApi {
+  @override
+  Future<List<NwpPoint>> fetchForecast(double lat, double lon) async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
 void main() {
   late _FakeWeatherApi weatherApi;
   late _FakeGeocodingApi geocodingApi;
@@ -115,6 +127,7 @@ void main() {
         geocodingApiProvider.overrideWithValue(geocodingApi),
         deviceLocationProvider.overrideWithValue(_StubLocation(location)),
         airQualityApiProvider.overrideWithValue(_FakeAirQualityApi()),
+        nwpApiProvider.overrideWithValue(_FakeNwpApi()),
       ],
     );
   }

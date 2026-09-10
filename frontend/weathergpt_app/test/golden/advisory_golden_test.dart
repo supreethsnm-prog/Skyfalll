@@ -10,7 +10,6 @@ import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/advisory/advisory_controller.dart';
 import 'package:weathergpt_app/features/advisory/advisory_screen.dart';
-import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/features/chat/conversation_store.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
 import 'package:weathergpt_app/features/saved/saved_places_controller.dart';
@@ -131,6 +130,12 @@ Future<void> _pump(WidgetTester tester) async {
         weatherApiProvider.overrideWithValue(FakeWeatherApi()),
         alertsApiProvider.overrideWithValue(FakeAlertsApi()),
         airQualityApiProvider.overrideWithValue(FakeAirQualityApi()),
+        // AdvisoryScreen reads its location from homeControllerProvider and
+        // calls loadInitial(), which now fetches NWP alongside the rest —
+        // left unmocked, that hits a real, unreachable host. AdvisoryScreen
+        // never renders the NWP panel, so the fixture's content is
+        // irrelevant here; only avoiding the hang matters.
+        nwpApiProvider.overrideWithValue(FakeNwpApi()),
         deviceLocationProvider.overrideWithValue(const FakeDeviceLocation()),
         geocodingApiProvider.overrideWithValue(const FakeGeocodingApi()),
         alertsSocketProvider.overrideWithValue(FakeAlertsSocket()),

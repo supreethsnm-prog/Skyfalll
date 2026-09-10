@@ -22,6 +22,7 @@ import 'widgets/detail_tiles.dart';
 import 'widgets/forecast_panel.dart';
 import 'widgets/home_hero.dart';
 import 'widgets/location_search_sheet.dart';
+import 'widgets/severe_weather_panel.dart';
 import '../saved/saved_places_controller.dart';
 import '../../data/geocoding_api.dart';
 
@@ -355,6 +356,8 @@ class _LoadedView extends ConsumerWidget {
             uvIndexMax: today?.uvIndexMax,
             airQuality: state.airQuality,
           ),
+          const SizedBox(height: AppSpacing.md),
+          SevereWeatherPanel(nwp: state.nwp, foreground: foreground),
           const SizedBox(height: AppSpacing.md),
           SunPanel(
             foreground: foreground,
