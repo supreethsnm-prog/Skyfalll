@@ -342,19 +342,21 @@ def historical_archive_endpoint(
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid date '{date}'.")
 
-    provider = OpenMeteoArchiveProvider()
     try:
-        reading = provider.fetch_day(lat, lon, date)
-        try:
-            previous_year_date = requested_date.replace(year=requested_date.year - 1)
-        except ValueError:
-            # Feb 29 with no Feb 29 the year before.
-            previous_year_date = requested_date.replace(
-                year=requested_date.year - 1, day=28
+        with OpenMeteoArchiveProvider() as provider:
+            reading = provider.fetch_day(lat, lon, date)
+            try:
+                previous_year_date = requested_date.replace(
+                    year=requested_date.year - 1
+                )
+            except ValueError:
+                # Feb 29 with no Feb 29 the year before.
+                previous_year_date = requested_date.replace(
+                    year=requested_date.year - 1, day=28
+                )
+            previous_year_reading = provider.fetch_day(
+                lat, lon, previous_year_date.isoformat()
             )
-        previous_year_reading = provider.fetch_day(
-            lat, lon, previous_year_date.isoformat()
-        )
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=502, detail=f"Open-Meteo archive request failed: {exc}"

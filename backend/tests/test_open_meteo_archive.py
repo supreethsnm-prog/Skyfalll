@@ -77,3 +77,49 @@ def test_fetch_day_returns_none_when_upstream_has_no_data():
     )
 
     assert reading is None
+
+
+def test_fetch_day_can_be_called_twice_on_the_same_provider():
+    """Regression test for a real 500: the endpoint calls `fetch_day` twice
+    per request (the requested date, then the same date a year earlier) on
+    ONE provider instance. An earlier version closed the client inside
+    `fetch_day` itself, so the second call raised "Cannot send a request,
+    as the client has been closed" — invisible to every other test here
+    because they all inject a client and never exercise the
+    provider-owns-its-client path this test forces by omitting one.
+    """
+
+    def handler(request):
+        return httpx.Response(200, json=FULL_DAY_RESPONSE)
+
+    provider = OpenMeteoArchiveProvider(
+        client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+
+    first = provider.fetch_day(latitude=15.36, longitude=75.12, date_str="2024-07-15")
+    second = provider.fetch_day(latitude=15.36, longitude=75.12, date_str="2023-07-15")
+
+    assert first is not None
+    assert second is not None
+
+
+def test_owned_client_closes_on_context_manager_exit():
+    with OpenMeteoArchiveProvider() as provider:
+        client = provider._client
+        assert client.is_closed is False
+
+    assert client.is_closed is True
+
+
+def test_injected_client_is_not_closed_by_the_provider():
+    """An injected client belongs to its caller (e.g. a shared test client
+    or connection pool) and must survive the provider's own lifecycle."""
+    client = httpx.Client(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, json=FULL_DAY_RESPONSE))
+    )
+
+    with OpenMeteoArchiveProvider(client=client) as provider:
+        provider.fetch_day(latitude=15.36, longitude=75.12, date_str="2024-07-15")
+
+    assert client.is_closed is False
+    client.close()
