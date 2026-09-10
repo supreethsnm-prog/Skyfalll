@@ -111,17 +111,20 @@ class AppDrawer extends ConsumerWidget {
                   _NavEntry(
                     icon: Icons.explore_outlined,
                     label: 'Discover',
-                    onTap: () {},
-                  ),
-                  _NavEntry(
-                    icon: Icons.article_outlined,
-                    label: 'News',
-                    onTap: () {},
+                    selected: activeRoute == '/discover',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      context.go('/discover');
+                    },
                   ),
                   _NavEntry(
                     icon: Icons.warning_amber_rounded,
                     label: 'Alerts',
-                    onTap: () {},
+                    selected: activeRoute == '/alerts',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      context.go('/alerts');
+                    },
                   ),
                   _NavEntry(
                     icon: Icons.bookmark_border,

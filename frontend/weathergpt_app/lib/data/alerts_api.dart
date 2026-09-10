@@ -9,6 +9,18 @@ class AlertSummary {
   final double? latitude;
   final double? longitude;
 
+  /// The feed's own effective-start string, e.g. "Thu Sep 10 22:15:00 IST
+  /// 2026" (SACHET's Java-style format, not ISO-8601) — kept as upstream
+  /// text and shown verbatim rather than reparsed, since it is already
+  /// human-readable and reparsing an unfamiliar format risks silently
+  /// misreading a timezone.
+  final String? effectiveStartTime;
+
+  /// When WeatherGPT's own ingestion fetched this alert, ISO-8601 UTC —
+  /// unlike [effectiveStartTime], reliably parseable, so this is what
+  /// "alerts from the past week" filters and sorts by.
+  final String? fetchedAt;
+
   const AlertSummary({
     required this.id,
     required this.severity,
@@ -16,6 +28,8 @@ class AlertSummary {
     required this.areaDescription,
     required this.latitude,
     required this.longitude,
+    this.effectiveStartTime,
+    this.fetchedAt,
   });
 
   factory AlertSummary.fromJson(Map<String, dynamic> json) {
@@ -26,6 +40,8 @@ class AlertSummary {
       areaDescription: json['area_description'] as String?,
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
+      effectiveStartTime: json['effective_start_time'] as String?,
+      fetchedAt: json['fetched_at'] as String?,
     );
   }
 }
