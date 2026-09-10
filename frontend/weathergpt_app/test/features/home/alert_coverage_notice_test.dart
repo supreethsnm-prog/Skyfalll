@@ -94,6 +94,28 @@ const _paris = GeocodeResult(
   state: null,
 );
 
+/// The case that prompted all of this, and the one a bounding box CANNOT
+/// catch: Kathmandu sits inside any rectangle drawn around India, so a
+/// box-only check reported Nepal as covered and stayed silent — exactly
+/// the behaviour the user reported.
+const _kathmandu = GeocodeResult(
+  displayName: 'Kathmandu Metropolitan City, Bagamati Province',
+  latitude: 27.7172,
+  longitude: 85.3240,
+  country: 'Nepal',
+  state: null,
+);
+
+/// A location whose reverse geocoding failed, so there is no country to
+/// judge by — the only case where the coarse bounding box is still used.
+const _unnamedFarAway = GeocodeResult(
+  displayName: 'Current location',
+  latitude: 48.8566,
+  longitude: 2.3522,
+  country: null,
+  state: null,
+);
+
 const _delhi = GeocodeResult(
   displayName: 'New Delhi, India',
   latitude: 28.6139,
@@ -154,6 +176,25 @@ void main() {
       'an out-of-India location with no nearby alerts explains the '
       'coverage gap instead of reading as a missed alert', (tester) async {
     await _pumpHome(tester, location: _paris);
+
+    expect(find.text(_coverageNote), findsOneWidget);
+  });
+
+  testWidgets(
+      'NEPAL — a neighbour inside any India bounding box still explains '
+      'the coverage gap', (tester) async {
+    // The regression this whole notice exists for. A bounding-box check
+    // passes France and fails here, because Nepal is geographically
+    // inside any box containing India.
+    await _pumpHome(tester, location: _kathmandu);
+
+    expect(find.text(_coverageNote), findsOneWidget);
+  });
+
+  testWidgets(
+      'an unnamed location far outside India still explains the gap, '
+      'falling back to the box when no country is known', (tester) async {
+    await _pumpHome(tester, location: _unnamedFarAway);
 
     expect(find.text(_coverageNote), findsOneWidget);
   });

@@ -30,6 +30,31 @@ double haversineKm(double lat1, double lon1, double lat2, double lon2) {
 class IndiaAlertCoverageBox {
   IndiaAlertCoverageBox._();
 
+  /// The country name Nominatim returns for India, and the value
+  /// [isOutsideCoverage] compares against.
+  static const indiaCountryName = 'India';
+
+  /// Whether a location is outside our alert sources' coverage.
+  ///
+  /// Prefers the geocoded COUNTRY, because a bounding box cannot answer
+  /// this question: any rectangle containing India also contains Nepal,
+  /// Bhutan, Bangladesh and parts of Pakistan and China. A box-only check
+  /// silently failed for the exact case that prompted this — a user in
+  /// Nepal seeing no alerts and no explanation.
+  ///
+  /// Falls back to the box only when the country is unknown, which
+  /// happens when reverse geocoding failed and the location is a bare
+  /// coordinate. There the box is a coarse last resort: it will not catch
+  /// a neighbour country, but it will still catch somewhere far away.
+  static bool isOutsideCoverage({
+    required String? country,
+    required double latitude,
+    required double longitude,
+  }) {
+    if (country != null) return country != indiaCountryName;
+    return !contains(latitude, longitude);
+  }
+
   static const double minLatitude = 6.5;
   static const double maxLatitude = 37.5;
   static const double minLongitude = 68.0;

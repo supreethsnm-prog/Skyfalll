@@ -343,9 +343,10 @@ class _LoadedView extends ConsumerWidget {
           // clear". Inside India, silence already means all clear and a
           // disclaimer here would be noise.
           if (state.nearbyAlerts.isEmpty &&
-              !IndiaAlertCoverageBox.contains(
-                state.location.latitude,
-                state.location.longitude,
+              IndiaAlertCoverageBox.isOutsideCoverage(
+                country: state.location.country,
+                latitude: state.location.latitude,
+                longitude: state.location.longitude,
               )) ...[
             _AlertCoverageNotice(foreground: foreground),
             const SizedBox(height: AppSpacing.md),
