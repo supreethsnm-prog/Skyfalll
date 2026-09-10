@@ -94,6 +94,19 @@ def _warm_point_caches() -> str:
     return f"{warmed} point caches warmed"
 
 
+def _restore_era5() -> str:
+    # Restores from a local snapshot rather than re-fetching: a real ERA5
+    # seed is 25s-2min PER ROW against Copernicus, and the test suite
+    # truncates this table like every other. Re-seeding after each pytest
+    # run would cost half an hour, which is why historical data had simply
+    # stayed empty. See scripts/era5_snapshot.py.
+    from scripts.era5_snapshot import SNAPSHOT_PATH, restore
+
+    if not SNAPSHOT_PATH.exists():
+        return "skipped — no snapshot (run scripts/seed_era5_history.py, then `era5_snapshot save`)"
+    return f"{restore()} historical rows restored"
+
+
 def _check_advisories() -> str:
     # Advisories are computed on demand from the forecast cache, so there
     # is nothing to ingest — but calling them proves the rules run and
@@ -113,6 +126,7 @@ STEPS = [
     Step("Marine PFZ (INCOIS)", _ingest_marine),
     Step("NWP (NOAA GFS)", _ingest_gfs),
     Step("Point caches", _warm_point_caches),
+    Step("ERA5 historical", _restore_era5),
     Step("Advisories", _check_advisories),
 ]
 

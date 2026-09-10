@@ -1,0 +1,110 @@
+[
+  {
+    "location_name": "Pune",
+    "observation_date": "2024-07-15",
+    "latitude": 18.52,
+    "longitude": 73.86,
+    "temp_2m_c": 25.378503417968773,
+    "dewpoint_2m_c": 22.637597656250023,
+    "precip_mm": 0.18262863159179688,
+    "wind_speed_10m_kmh": 8.732189204079713,
+    "wind_direction_10m_deg": 262.86885893510464,
+    "mslp_hpa": 1001.87625
+  },
+  {
+    "location_name": "New Delhi",
+    "observation_date": "2024-07-15",
+    "latitude": 28.61,
+    "longitude": 77.21,
+    "temp_2m_c": 32.7398620605469,
+    "dewpoint_2m_c": 27.360253906250023,
+    "precip_mm": 1.9974708557128906,
+    "wind_speed_10m_kmh": 9.558901515828154,
+    "wind_direction_10m_deg": 66.44330174652968,
+    "mslp_hpa": 997.00625
+  },
+  {
+    "location_name": "Bhagalpur",
+    "observation_date": "2024-07-15",
+    "latitude": 25.27,
+    "longitude": 87.23,
+    "temp_2m_c": 32.9332214355469,
+    "dewpoint_2m_c": 27.795800781250023,
+    "precip_mm": 0.13446807861328125,
+    "wind_speed_10m_kmh": 11.282516153517376,
+    "wind_direction_10m_deg": 119.09126339605537,
+    "mslp_hpa": 998.00375
+  },
+  {
+    "location_name": "New Delhi",
+    "observation_date": "2023-07-15",
+    "latitude": 28.61,
+    "longitude": 77.21,
+    "temp_2m_c": 30.810144042968773,
+    "dewpoint_2m_c": 27.044885253906273,
+    "precip_mm": 1.4462471008300781,
+    "wind_speed_10m_kmh": 9.109649629806405,
+    "wind_direction_10m_deg": 190.0252119152726,
+    "mslp_hpa": 999.11
+  },
+  {
+    "location_name": "New Delhi",
+    "observation_date": "2024-01-15",
+    "latitude": 28.61,
+    "longitude": 77.21,
+    "temp_2m_c": 13.879541015625023,
+    "dewpoint_2m_c": 7.217797851562523,
+    "precip_mm": 0.0,
+    "wind_speed_10m_kmh": 6.148910609259677,
+    "wind_direction_10m_deg": 353.1823931008139,
+    "mslp_hpa": 1015.259375
+  },
+  {
+    "location_name": "Pune",
+    "observation_date": "2023-07-15",
+    "latitude": 18.52,
+    "longitude": 73.86,
+    "temp_2m_c": 24.753503417968773,
+    "dewpoint_2m_c": 22.726525878906273,
+    "precip_mm": 0.2689361572265625,
+    "wind_speed_10m_kmh": 14.260154120861715,
+    "wind_direction_10m_deg": 261.256019167458,
+    "mslp_hpa": 1008.455
+  },
+  {
+    "location_name": "Pune",
+    "observation_date": "2024-01-15",
+    "latitude": 18.52,
+    "longitude": 73.86,
+    "temp_2m_c": 26.408837890625023,
+    "dewpoint_2m_c": 8.094750976562523,
+    "precip_mm": 0.0,
+    "wind_speed_10m_kmh": 11.141027278358381,
+    "wind_direction_10m_deg": 286.87014715333123,
+    "mslp_hpa": 1012.194375
+  },
+  {
+    "location_name": "Bhagalpur",
+    "observation_date": "2023-07-15",
+    "latitude": 25.27,
+    "longitude": 87.23,
+    "temp_2m_c": 31.610955810546898,
+    "dewpoint_2m_c": 27.423791503906273,
+    "precip_mm": 1.7285346984863281,
+    "wind_speed_10m_kmh": 7.651104376843254,
+    "wind_direction_10m_deg": 79.80045536719794,
+    "mslp_hpa": 999.21125
+  },
+  {
+    "location_name": "Bhagalpur",
+    "observation_date": "2024-01-15",
+    "latitude": 25.27,
+    "longitude": 87.23,
+    "temp_2m_c": 15.340478515625023,
+    "dewpoint_2m_c": 12.592797851562523,
+    "precip_mm": 0.0,
+    "wind_speed_10m_kmh": 7.317000059449365,
+    "wind_direction_10m_deg": 258.7975394818621,
+    "mslp_hpa": 1013.744375
+  }
+]
