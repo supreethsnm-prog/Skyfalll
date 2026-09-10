@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 
 import '../../features/advisory/advisory_screen.dart';
+import '../../features/aviation/aviation_screen.dart';
 import '../../features/chat/chat_screen.dart';
 import '../../features/gallery/gallery_screen.dart';
 import '../../features/home/home_screen.dart';
@@ -34,6 +35,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/advisories',
       builder: (context, state) => const AdvisoryScreen(),
+    ),
+    GoRoute(
+      path: '/aviation',
+      builder: (context, state) => const AviationScreen(),
     ),
     GoRoute(
       path: '/gallery',

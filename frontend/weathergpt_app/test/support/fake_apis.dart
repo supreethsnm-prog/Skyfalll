@@ -6,8 +6,10 @@ import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/alerts_socket.dart';
+import 'package:weathergpt_app/data/metar_api.dart';
 import 'package:weathergpt_app/data/nwp_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
+import 'package:weathergpt_app/features/aviation/aviation_controller.dart';
 import 'package:weathergpt_app/features/advisory/advisory_controller.dart';
 import 'package:weathergpt_app/features/chat/conversation_store.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
@@ -161,6 +163,42 @@ class FakeAdvisoryApi implements AdvisoryApi {
       super.noSuchMethod(invocation);
 }
 
+/// Stands in for `MetarApi`, so any test that mounts `AviationScreen` (or a
+/// route tree that could reach it) does not make a live HTTP call. Returns
+/// a realistic, fixed reading for whatever ICAO is asked for — VIDP Delhi
+/// MVFR, the exact shape verified live in `.superpowers/sdd/aviation-brief.md`
+/// — rather than a placeholder.
+class FakeMetarApi implements MetarApi {
+  FakeMetarApi([this.reading]) : _fixed = reading != null;
+
+  /// When set, always returned regardless of the requested ICAO. When
+  /// null, a default VIDP-shaped reading is synthesised for the requested
+  /// code so a test can distinguish which airport was actually asked for.
+  MetarReading? reading;
+  final bool _fixed;
+
+  @override
+  Future<MetarReading?> fetch(String icao) async {
+    if (_fixed) return reading;
+    return MetarReading(
+      icaoId: icao,
+      rawMetar: 'METAR $icao 100230Z 26009KT 4000 HZ NSC 29/22 Q1009 NOSIG',
+      observedAt: '2026-09-10T02:30:00.000Z',
+      stationName: 'Test Station, $icao',
+      temperatureC: 29.0,
+      dewpointC: 22.0,
+      windDirDeg: 260.0,
+      windSpeedKt: 9.0,
+      visibilitySm: 2.49,
+      flightCategory: 'MVFR',
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
+
 /// Device location that reports no fix, so tests exercise the default-city
 /// path without touching the geolocator plugin — which is not available in
 /// a widget test and throws MissingPluginException if reached.
@@ -250,6 +288,7 @@ final fakeApiOverrides = [
   airQualityApiProvider.overrideWithValue(FakeAirQualityApi()),
   nwpApiProvider.overrideWithValue(FakeNwpApi()),
   advisoryApiProvider.overrideWithValue(FakeAdvisoryApi()),
+  metarApiProvider.overrideWithValue(FakeMetarApi()),
   deviceLocationProvider.overrideWithValue(const FakeDeviceLocation()),
   geocodingApiProvider.overrideWithValue(const FakeGeocodingApi()),
   alertsSocketProvider.overrideWithValue(FakeAlertsSocket()),

@@ -82,6 +82,15 @@ class AppDrawer extends ConsumerWidget {
                     },
                   ),
                   _NavEntry(
+                    icon: Icons.flight_outlined,
+                    label: 'Aviation',
+                    selected: activeRoute == '/aviation',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      context.go('/aviation');
+                    },
+                  ),
+                  _NavEntry(
                     icon: Icons.explore_outlined,
                     label: 'Discover',
                     onTap: () {},
