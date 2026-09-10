@@ -61,7 +61,21 @@ class _AdvisoryScreenState extends ConsumerState<AdvisoryScreen> {
 
   void _maybeLoadFromHome() {
     final homeState = ref.read(homeControllerProvider);
-    if (homeState is HomeLoaded) _loadFor(homeState.location);
+    if (homeState is HomeLoaded) {
+      _loadFor(homeState.location);
+      return;
+    }
+
+    // Home has not resolved a location yet. Normally it has — it is the
+    // launch route — but arriving here first (a hot restart on this
+    // route, or a deep link) would otherwise leave this screen spinning
+    // forever, waiting on a load nothing had asked for. Kicking Home off
+    // keeps it the single owner of "where is the user" rather than
+    // resolving a second location here; the ref.listen below picks the
+    // result up.
+    if (homeState is HomeLoading) {
+      ref.read(homeControllerProvider.notifier).loadInitial();
+    }
   }
 
   void _loadFor(GeocodeResult location) {
@@ -234,7 +248,18 @@ class _LoadedView extends ConsumerWidget {
             const SizedBox(height: AppSpacing.sm),
             _UrbanRiskRow(riskSummary: state.urban.riskSummary),
             const SizedBox(height: AppSpacing.xxl),
-            Text('Agriculture', style: AppTypography.label(AppColors.textPrimary)),
+            // Headed "Advisories", not "Agriculture": the list below
+            // merges both endpoints' advice, and sitting it under an
+            // "Agriculture" heading attributed urban warnings — waterlogged
+            // underpasses, loose hoardings — to farming. The crop chips
+            // filter only the agriculture half, so they carry their own
+            // label rather than heading the whole section.
+            Text('Advisories', style: AppTypography.label(AppColors.textPrimary)),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Filter crop advice',
+              style: AppTypography.caption(AppColors.textSecondary),
+            ),
             const SizedBox(height: AppSpacing.sm),
             _CropChips(selected: crop, onSelected: onSelectCrop),
             const SizedBox(height: AppSpacing.md),

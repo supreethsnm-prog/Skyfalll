@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/location/device_location.dart';
+import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
@@ -83,6 +84,22 @@ class _StubLocation implements DeviceLocation {
   Future<LocationResult> current() async => result;
 }
 
+/// Air quality must be stubbed even though these tests never assert on it.
+///
+/// `_load` fires an air-quality request alongside the other three. Left
+/// unoverridden it builds a real Dio against AppEnv's default host, which
+/// is unreachable from a test, so every load sat waiting on a doomed
+/// socket — enough to blow the 30s timeout once a test looped over all
+/// four failure reasons.
+class _FakeAirQualityApi implements AirQualityApi {
+  @override
+  Future<AirQuality> fetchCurrent(double lat, double lon) async =>
+      const AirQuality(observedAt: '2026-09-10T14:00', usAqi: 90);
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
 void main() {
   late _FakeWeatherApi weatherApi;
   late _FakeGeocodingApi geocodingApi;
@@ -97,6 +114,7 @@ void main() {
         alertsApiProvider.overrideWithValue(_FakeAlertsApi()),
         geocodingApiProvider.overrideWithValue(geocodingApi),
         deviceLocationProvider.overrideWithValue(_StubLocation(location)),
+        airQualityApiProvider.overrideWithValue(_FakeAirQualityApi()),
       ],
     );
   }
