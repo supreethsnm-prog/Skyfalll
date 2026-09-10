@@ -1,16 +1,19 @@
 import 'dart:async';
 
+import 'package:latlong2/latlong.dart';
 import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/data/advisory_api.dart';
 import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/alerts_socket.dart';
+import 'package:weathergpt_app/data/marine_api.dart';
 import 'package:weathergpt_app/data/metar_api.dart';
 import 'package:weathergpt_app/data/nwp_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/aviation/aviation_controller.dart';
 import 'package:weathergpt_app/features/advisory/advisory_controller.dart';
+import 'package:weathergpt_app/features/marine/marine_controller.dart';
 import 'package:weathergpt_app/features/chat/conversation_store.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
 import 'package:weathergpt_app/features/saved/saved_places_controller.dart';
@@ -199,6 +202,39 @@ class FakeMetarApi implements MetarApi {
       super.noSuchMethod(invocation);
 }
 
+/// Stands in for `MarineApi`, so any test that mounts `MarineScreen` (or a
+/// route tree that could reach it) does not make a live HTTP call. Defaults
+/// to a single zone shaped like the verified live contract
+/// (`.superpowers/sdd/marine-brief.md`) — a real coordinate pair from the
+/// live PFZ data, not a placeholder.
+class FakeMarineApi implements MarineApi {
+  FakeMarineApi([
+    this.zones = const [
+      PfzZone(
+        id: 1,
+        externalId: 'pfzlines.1',
+        category: 'ghrsst',
+        sectorBoundary: 3,
+        julianDay: '252',
+        year: 2026,
+        lengthKm: 58.3588654526,
+        lines: [
+          [LatLng(20.1663, 72.4817), LatLng(20.1653, 72.4819)],
+        ],
+      ),
+    ],
+  ]);
+
+  List<PfzZone> zones;
+
+  @override
+  Future<List<PfzZone>> fetchPfzZones() async => zones;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
+
 /// Device location that reports no fix, so tests exercise the default-city
 /// path without touching the geolocator plugin — which is not available in
 /// a widget test and throws MissingPluginException if reached.
@@ -289,6 +325,7 @@ final fakeApiOverrides = [
   nwpApiProvider.overrideWithValue(FakeNwpApi()),
   advisoryApiProvider.overrideWithValue(FakeAdvisoryApi()),
   metarApiProvider.overrideWithValue(FakeMetarApi()),
+  marineApiProvider.overrideWithValue(FakeMarineApi()),
   deviceLocationProvider.overrideWithValue(const FakeDeviceLocation()),
   geocodingApiProvider.overrideWithValue(const FakeGeocodingApi()),
   alertsSocketProvider.overrideWithValue(FakeAlertsSocket()),

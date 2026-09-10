@@ -5,6 +5,7 @@ import '../../features/aviation/aviation_screen.dart';
 import '../../features/chat/chat_screen.dart';
 import '../../features/gallery/gallery_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../features/marine/marine_screen.dart';
 import '../../features/saved/saved_places_screen.dart';
 
 /// A plain route stack — deliberately **no** bottom navigation bar.
@@ -43,6 +44,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/gallery',
       builder: (context, state) => const GalleryScreen(),
+    ),
+    GoRoute(
+      path: '/marine',
+      builder: (context, state) => const MarineScreen(),
     ),
   ],
 );

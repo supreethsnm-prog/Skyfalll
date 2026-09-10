@@ -91,6 +91,15 @@ class AppDrawer extends ConsumerWidget {
                     },
                   ),
                   _NavEntry(
+                    icon: Icons.sailing_outlined,
+                    label: 'Fishing zones',
+                    selected: activeRoute == '/marine',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      context.go('/marine');
+                    },
+                  ),
+                  _NavEntry(
                     icon: Icons.explore_outlined,
                     label: 'Discover',
                     onTap: () {},
