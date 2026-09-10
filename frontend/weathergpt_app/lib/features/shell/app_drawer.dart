@@ -100,6 +100,15 @@ class AppDrawer extends ConsumerWidget {
                     },
                   ),
                   _NavEntry(
+                    icon: Icons.history,
+                    label: 'Historical',
+                    selected: activeRoute == '/historical',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      context.go('/historical');
+                    },
+                  ),
+                  _NavEntry(
                     icon: Icons.explore_outlined,
                     label: 'Discover',
                     onTap: () {},

@@ -2,17 +2,20 @@ import 'dart:async';
 
 import 'package:latlong2/latlong.dart';
 import 'package:weathergpt_app/core/location/device_location.dart';
+import 'package:weathergpt_app/core/network/app_error.dart';
 import 'package:weathergpt_app/data/advisory_api.dart';
 import 'package:weathergpt_app/data/air_quality_api.dart';
 import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/alerts_api.dart';
 import 'package:weathergpt_app/data/alerts_socket.dart';
+import 'package:weathergpt_app/data/historical_api.dart';
 import 'package:weathergpt_app/data/marine_api.dart';
 import 'package:weathergpt_app/data/metar_api.dart';
 import 'package:weathergpt_app/data/nwp_api.dart';
 import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/aviation/aviation_controller.dart';
 import 'package:weathergpt_app/features/advisory/advisory_controller.dart';
+import 'package:weathergpt_app/features/historical/historical_controller.dart';
 import 'package:weathergpt_app/features/marine/marine_controller.dart';
 import 'package:weathergpt_app/features/chat/conversation_store.dart';
 import 'package:weathergpt_app/features/home/home_controller.dart';
@@ -235,6 +238,45 @@ class FakeMarineApi implements MarineApi {
       super.noSuchMethod(invocation);
 }
 
+/// Stands in for `HistoricalApi`, so any test that mounts `HistoricalScreen`
+/// (or a route tree that could reach it) does not make a live HTTP call.
+/// Defaults to an empty coverage list — a real, expected state for this
+/// endpoint (see `HistoricalCoverageEmpty`), not a placeholder — so tests
+/// that don't care about Historical specifically get a harmless, terminal
+/// state rather than a screen left spinning.
+class FakeHistoricalApi implements HistoricalApi {
+  FakeHistoricalApi({
+    this.coverage = const [],
+    this.readings = const {},
+    this.failAvailable = false,
+    this.failFetch = false,
+  });
+
+  List<HistoricalCoverage> coverage;
+
+  /// "location|date" -> reading. A missing key means the backend's 404
+  /// (unseeded pair), matching what the real `HistoricalApi.fetch` returns.
+  final Map<String, HistoricalReading?> readings;
+  final bool failAvailable;
+  final bool failFetch;
+
+  @override
+  Future<List<HistoricalCoverage>> fetchAvailable() async {
+    if (failAvailable) throw const NetworkConnectionError();
+    return coverage;
+  }
+
+  @override
+  Future<HistoricalReading?> fetch(String location, String date) async {
+    if (failFetch) throw const NetworkConnectionError();
+    return readings['$location|$date'];
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
+
 /// Device location that reports no fix, so tests exercise the default-city
 /// path without touching the geolocator plugin — which is not available in
 /// a widget test and throws MissingPluginException if reached.
@@ -326,6 +368,7 @@ final fakeApiOverrides = [
   advisoryApiProvider.overrideWithValue(FakeAdvisoryApi()),
   metarApiProvider.overrideWithValue(FakeMetarApi()),
   marineApiProvider.overrideWithValue(FakeMarineApi()),
+  historicalApiProvider.overrideWithValue(FakeHistoricalApi()),
   deviceLocationProvider.overrideWithValue(const FakeDeviceLocation()),
   geocodingApiProvider.overrideWithValue(const FakeGeocodingApi()),
   alertsSocketProvider.overrideWithValue(FakeAlertsSocket()),

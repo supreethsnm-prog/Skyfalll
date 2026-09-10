@@ -4,6 +4,7 @@ import '../../features/advisory/advisory_screen.dart';
 import '../../features/aviation/aviation_screen.dart';
 import '../../features/chat/chat_screen.dart';
 import '../../features/gallery/gallery_screen.dart';
+import '../../features/historical/historical_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/marine/marine_screen.dart';
 import '../../features/saved/saved_places_screen.dart';
@@ -48,6 +49,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/marine',
       builder: (context, state) => const MarineScreen(),
+    ),
+    GoRoute(
+      path: '/historical',
+      builder: (context, state) => const HistoricalScreen(),
     ),
   ],
 );
