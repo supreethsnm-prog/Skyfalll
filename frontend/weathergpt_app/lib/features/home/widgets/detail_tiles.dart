@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -6,6 +7,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/air_quality_api.dart';
 import '../../../data/weather_api.dart';
+import '../../../l10n/app_strings.dart';
 import '../../../shared/widgets/glass_panel.dart';
 import '../../../shared/widgets/weather_icon.dart';
 import '../weather_label.dart';
@@ -62,16 +64,22 @@ class AqiPill extends StatelessWidget {
 /// bar under each temperature standing in for Google Weather's line graph
 /// — a line through this few points reads as noise at phone width.
 class HourlyPanel extends StatelessWidget {
-  const HourlyPanel({super.key, required this.hours, required this.foreground});
+  const HourlyPanel({
+    super.key,
+    required this.hours,
+    required this.foreground,
+    this.strings,
+  });
 
   final List<HourlyPoint> hours;
   final Color foreground;
+  final AppStrings? strings;
 
   /// Clock time from an Open-Meteo ISO local timestamp, e.g. "15:00".
   /// Falls back to the raw string rather than throwing — one odd label
   /// beats a crashed screen.
-  static String _label(String time, bool isFirst) {
-    if (isFirst) return 'Now';
+  static String _label(String time, bool isFirst, AppStrings s) {
+    if (isFirst) return s.now;
     final t = DateTime.tryParse(time);
     if (t == null) return time;
     return '${t.hour.toString().padLeft(2, '0')}:00';
@@ -81,6 +89,7 @@ class HourlyPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     if (hours.isEmpty) return const SizedBox.shrink();
 
+    final s = strings ?? AppStrings('en');
     final temps = hours.map((h) => h.temperatureC);
     final min = temps.reduce((a, b) => a < b ? a : b);
     final max = temps.reduce((a, b) => a > b ? a : b);
@@ -92,7 +101,7 @@ class HourlyPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Hourly forecast', style: AppTypography.label(foreground)),
+          Text(s.hourlyForecast, style: AppTypography.label(foreground)),
           const SizedBox(height: AppSpacing.md),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -129,7 +138,7 @@ class HourlyPanel extends StatelessWidget {
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          _label(hours[i].time, i == 0),
+                          _label(hours[i].time, i == 0, s),
                           style: AppTypography.caption(foreground),
                         ),
                       ],
@@ -153,29 +162,32 @@ class DetailGrid extends StatelessWidget {
     required this.foreground,
     this.uvIndexMax,
     this.airQuality,
+    this.strings,
   });
 
   final CurrentWeather weather;
   final Color foreground;
   final double? uvIndexMax;
   final AirQuality? airQuality;
+  final AppStrings? strings;
 
   /// WHO/WMO UV exposure bands.
-  static String _uvBand(double uv) {
-    if (uv < 3) return 'Low';
-    if (uv < 6) return 'Moderate';
-    if (uv < 8) return 'High';
-    if (uv < 11) return 'Very high';
-    return 'Extreme';
+  static String _uvBand(double uv, AppStrings s) {
+    if (uv < 3) return s.riskLow;
+    if (uv < 6) return s.riskModerate;
+    if (uv < 8) return s.riskHigh;
+    if (uv < 11) return s.riskVeryHigh;
+    return s.riskExtreme;
   }
 
   @override
   Widget build(BuildContext context) {
+    final s = strings ?? AppStrings('en');
     final tiles = <({IconData icon, String label, String value, String? sub})>[
       if (weather.apparentTemperatureC != null)
         (
           icon: Icons.thermostat,
-          label: 'Feels like',
+          label: s.feelsLike,
           value: '${weather.apparentTemperatureC!.round()}°',
           sub: null,
         ),
@@ -186,44 +198,44 @@ class DetailGrid extends StatelessWidget {
       if (weather.uvIndex != null)
         (
           icon: Icons.wb_sunny_outlined,
-          label: 'UV index',
+          label: s.uvIndex,
           value: weather.uvIndex!.round().toString(),
           sub: uvIndexMax == null
-              ? _uvBand(weather.uvIndex!)
-              : '${_uvBand(weather.uvIndex!)} · peak ${uvIndexMax!.round()}',
+              ? _uvBand(weather.uvIndex!, s)
+              : '${_uvBand(weather.uvIndex!, s)} · ${s.peak} ${uvIndexMax!.round()}',
         ),
       (
         icon: Icons.water_drop_outlined,
-        label: 'Humidity',
+        label: s.humidity,
         value: '${weather.humidityPct.round()}%',
         sub: weather.dewPointC == null
             ? null
-            : 'Dew pt ${weather.dewPointC!.round()}°',
+            : '${s.dewPoint} ${weather.dewPointC!.round()}°',
       ),
       (
         icon: Icons.air,
-        label: 'Wind',
+        label: s.wind,
         value: '${weather.windSpeedKmh.round()} km/h',
         sub: windDirectionLabel(weather.windDirectionDeg),
       ),
       if (weather.pressureHpa != null)
         (
           icon: Icons.speed,
-          label: 'Pressure',
+          label: s.pressure,
           value: weather.pressureHpa!.round().toString(),
           sub: 'hPa',
         ),
       if (weather.visibilityKm != null)
         (
           icon: Icons.visibility_outlined,
-          label: 'Visibility',
+          label: s.visibility,
           value: '${weather.visibilityKm!.toStringAsFixed(1)} km',
           sub: null,
         ),
       if (airQuality?.pm25 != null)
         (
           icon: Icons.blur_on,
-          label: 'PM2.5',
+          label: s.pm25,
           value: airQuality!.pm25!.round().toString(),
           sub: 'µg/m³',
         ),
@@ -280,12 +292,14 @@ class SunPanel extends StatelessWidget {
     required this.foreground,
     this.sunrise,
     this.sunset,
+    this.strings,
   });
 
   /// Upstream ISO strings, formatted here for display.
   final String? sunrise;
   final String? sunset;
   final Color foreground;
+  final AppStrings? strings;
 
   static String? _clock(String? iso) {
     if (iso == null) return null;
@@ -297,6 +311,7 @@ class SunPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = strings ?? AppStrings('en');
     final rise = _clock(sunrise);
     final set = _clock(sunset);
     if (rise == null || set == null) return const SizedBox.shrink();
@@ -306,20 +321,20 @@ class SunPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Sun', style: AppTypography.label(foreground)),
+          Text(s.sun, style: AppTypography.label(foreground)),
           const SizedBox(height: AppSpacing.md),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _SunEnd(
                 icon: Icons.wb_twilight,
-                label: 'Sunrise',
+                label: s.sunrise,
                 time: rise,
                 foreground: foreground,
               ),
               _SunEnd(
                 icon: Icons.nightlight_outlined,
-                label: 'Sunset',
+                label: s.sunset,
                 time: set,
                 foreground: foreground,
                 alignEnd: true,

@@ -9,6 +9,7 @@ import '../../data/geocoding_api.dart';
 import '../../data/historical_api.dart';
 import '../../shared/error_message.dart';
 import '../../shared/widgets/round_icon_button.dart';
+import '../../l10n/app_strings.dart';
 import '../home/home_controller.dart';
 import '../home/weather_label.dart';
 import '../home/widgets/location_search_sheet.dart';
@@ -76,6 +77,7 @@ class _HistoricalScreenState extends ConsumerState<HistoricalScreen> {
     });
 
     final state = ref.watch(historicalControllerProvider);
+    final s = ref.watch(uiStringsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bgBase,
@@ -91,13 +93,13 @@ class _HistoricalScreenState extends ConsumerState<HistoricalScreen> {
                   Builder(
                     builder: (context) => RoundIconButton(
                       icon: Icons.menu,
-                      tooltip: 'Open menu',
+                      tooltip: s.openMenu,
                       onPressed: () => Scaffold.of(context).openDrawer(),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Text(
-                    'Historical',
+                    s.historical,
                     style: AppTypography.title(AppColors.textPrimary),
                   ),
                 ],
@@ -149,8 +151,9 @@ class _Body extends ConsumerWidget {
 /// "Change date" (a standard Material date picker bounded to the archive's
 /// real coverage) — shown above both the loaded reading and the not-found
 /// state, since both know which location and date are selected.
-class _SelectionHeader extends StatelessWidget {
+class _SelectionHeader extends ConsumerWidget {
   const _SelectionHeader({
+    super.key,
     required this.location,
     required this.date,
     required this.onChangeLocation,
@@ -163,7 +166,8 @@ class _SelectionHeader extends StatelessWidget {
   final VoidCallback onChangeDate;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -179,8 +183,8 @@ class _SelectionHeader extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.md),
             _ChangeButton(
-              label: 'Change',
-              semanticsLabel: 'Choose a different location',
+              label: s.change,
+              semanticsLabel: s.changeLocation,
               onPressed: onChangeLocation,
             ),
           ],
@@ -197,8 +201,8 @@ class _SelectionHeader extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.md),
             _ChangeButton(
-              label: 'Change date',
-              semanticsLabel: 'Choose a different date',
+              label: s.changeDate,
+              semanticsLabel: s.changeDate,
               onPressed: onChangeDate,
             ),
           ],
@@ -299,6 +303,7 @@ class _LoadedView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final reading = state.reading;
+    final s = ref.watch(uiStringsProvider);
 
     return RefreshIndicator(
       onRefresh: () => ref.read(historicalControllerProvider.notifier).retry(),
@@ -339,7 +344,7 @@ class _LoadedView extends ConsumerWidget {
             ],
             const SizedBox(height: AppSpacing.xl),
             Text(
-              'Source: ECMWF ERA5 reanalysis',
+              s.sourceEra5,
               style: AppTypography.caption(AppColors.textSecondary),
             ),
           ],
@@ -349,13 +354,14 @@ class _LoadedView extends ConsumerWidget {
   }
 }
 
-class _StatsGrid extends StatelessWidget {
-  const _StatsGrid({required this.reading});
+class _StatsGrid extends ConsumerWidget {
+  const _StatsGrid({super.key, required this.reading});
 
   final ArchiveReading reading;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Column(
       children: [
         Row(
@@ -363,7 +369,7 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatTile(
                 icon: Icons.thermostat,
-                label: 'Max temperature',
+                label: s.maxTemp,
                 value: formatHistoricalTempC(reading.tempMaxC),
               ),
             ),
@@ -371,7 +377,7 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatTile(
                 icon: Icons.thermostat_outlined,
-                label: 'Min temperature',
+                label: s.minTemp,
                 value: formatHistoricalTempC(reading.tempMinC),
               ),
             ),
@@ -383,7 +389,7 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatTile(
                 icon: Icons.thermostat,
-                label: 'Mean temperature',
+                label: s.meanTemp,
                 value: formatHistoricalTempC(reading.tempMeanC),
               ),
             ),
@@ -391,7 +397,7 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatTile(
                 icon: Icons.air,
-                label: 'Max wind',
+                label: s.maxWind,
                 value: formatHistoricalWind(
                   reading.windDirectionDominantDeg,
                   reading.windSpeedMaxKmh,
@@ -455,16 +461,17 @@ class _StatTile extends StatelessWidget {
 /// (`precipitation_sum`) — a real daily sum, unlike the old ERA5-seed
 /// path's 1-hour accumulation, so this tile no longer needs to caveat what
 /// the number means.
-class _PrecipTile extends StatelessWidget {
-  const _PrecipTile({required this.precipMm});
+class _PrecipTile extends ConsumerWidget {
+  const _PrecipTile({super.key, required this.precipMm});
 
   final double? precipMm;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     final value = formatDailyPrecipMm(precipMm);
     return Semantics(
-      label: 'Daily precipitation total: ${value ?? 'not reported'}',
+      label: '${s.dailyTotal}: ${value ?? 'not reported'}',
       child: ExcludeSemantics(
         child: Container(
           width: double.infinity,
@@ -485,7 +492,7 @@ class _PrecipTile extends StatelessWidget {
                     color: AppColors.textSecondary,
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  Text('Precipitation', style: AppTypography.caption(AppColors.textSecondary)),
+                  Text(s.precipitation, style: AppTypography.caption(AppColors.textSecondary)),
                 ],
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -495,7 +502,7 @@ class _PrecipTile extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                'Daily total',
+                s.dailyTotal,
                 style: AppTypography.caption(AppColors.textSecondary),
               ),
             ],
@@ -510,8 +517,9 @@ class _PrecipTile extends StatelessWidget {
 /// reading against the reading for the same calendar date one year
 /// earlier, with the temperature difference stated plainly. Only rendered
 /// by the caller when `HistoricalLoaded.hasComparison` is true.
-class _ComparisonSection extends StatelessWidget {
+class _ComparisonSection extends ConsumerWidget {
   const _ComparisonSection({
+    super.key,
     required this.date,
     required this.reading,
     required this.comparisonReading,
@@ -522,7 +530,8 @@ class _ComparisonSection extends StatelessWidget {
   final ArchiveReading comparisonReading;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     final diffText = _diffText();
 
     return Container(
@@ -537,7 +546,7 @@ class _ComparisonSection extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Same day, different year',
+            s.sameDayDifferentYear,
             style: AppTypography.caption(AppColors.textSecondary),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -619,6 +628,7 @@ class _NotFoundView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(
@@ -650,13 +660,13 @@ class _NotFoundView extends ConsumerWidget {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   Text(
-                    'No archive reading for this date',
+                    s.noArchiveReading,
                     style: AppTypography.title(AppColors.textPrimary),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'Try a different date or location above.',
+                    s.tryDifferentDate,
                     style: AppTypography.label(AppColors.textSecondary),
                     textAlign: TextAlign.center,
                   ),
@@ -670,14 +680,15 @@ class _NotFoundView extends ConsumerWidget {
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
+class _ErrorView extends ConsumerWidget {
+  const _ErrorView({super.key, required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Container(
@@ -696,7 +707,7 @@ class _ErrorView extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              "Couldn't load historical data",
+              s.couldNotLoadHistorical,
               style: AppTypography.title(AppColors.textPrimary),
               textAlign: TextAlign.center,
             ),
@@ -718,7 +729,7 @@ class _ErrorView extends StatelessWidget {
                 ),
               ),
               child: Text(
-                'Try again',
+                s.tryAgain,
                 style: AppTypography.body(AppColors.textPrimary),
               ),
             ),

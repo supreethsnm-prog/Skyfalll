@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/news_api.dart';
+import '../../l10n/app_strings.dart';
 import '../../shared/error_message.dart';
 import '../../shared/widgets/round_icon_button.dart';
 import '../shell/app_drawer.dart';
@@ -32,6 +33,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(discoverControllerProvider);
+    final s = ref.watch(uiStringsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bgBase,
@@ -47,12 +49,12 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                   Builder(
                     builder: (context) => RoundIconButton(
                       icon: Icons.menu,
-                      tooltip: 'Open menu',
+                      tooltip: s.openMenu,
                       onPressed: () => Scaffold.of(context).openDrawer(),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
-                  Text('Discover', style: AppTypography.title(AppColors.textPrimary)),
+                  Text(s.discover, style: AppTypography.title(AppColors.textPrimary)),
                 ],
               ),
             ),
@@ -215,11 +217,12 @@ DateTime? _parseRfc822(String value) {
   );
 }
 
-class _EmptyView extends StatelessWidget {
+class _EmptyView extends ConsumerWidget {
   const _EmptyView();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xxl),
@@ -229,13 +232,13 @@ class _EmptyView extends StatelessWidget {
             const Icon(Icons.public_off, size: 40, color: AppColors.textPrimary),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              'No headlines right now',
+              s.noHeadlines,
               style: AppTypography.title(AppColors.textPrimary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Check back soon for climate news from around the world.',
+              s.checkBackSoonNews,
               style: AppTypography.label(AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
@@ -246,14 +249,15 @@ class _EmptyView extends StatelessWidget {
   }
 }
 
-class _ErrorView extends StatelessWidget {
+class _ErrorView extends ConsumerWidget {
   const _ErrorView({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Container(
@@ -266,7 +270,7 @@ class _ErrorView extends StatelessWidget {
             const Icon(Icons.cloud_off, size: 40, color: AppColors.textPrimary),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              "Couldn't load news",
+              s.couldNotLoadNews,
               style: AppTypography.title(AppColors.textPrimary),
               textAlign: TextAlign.center,
             ),
@@ -288,7 +292,7 @@ class _ErrorView extends StatelessWidget {
                 ),
               ),
               child: Text(
-                'Try again',
+                s.tryAgain,
                 style: AppTypography.body(AppColors.textPrimary),
               ),
             ),

@@ -8,6 +8,7 @@ import 'package:weathergpt_app/features/chat/chat_controller.dart';
 import 'package:weathergpt_app/features/chat/conversation_store.dart';
 import 'package:weathergpt_app/features/chat/audio_playback_controller.dart';
 import 'package:weathergpt_app/features/chat/chat_screen.dart';
+import 'package:weathergpt_app/l10n/app_strings.dart';
 import 'package:weathergpt_app/shared/widgets/language_settings_button.dart';
 
 import '../../support/fake_apis.dart';
@@ -32,7 +33,7 @@ class _SilentChatApi implements ChatApi {
 }
 
 void main() {
-  testWidgets('language settings button opens sheet with all sections',
+  testWidgets('language settings button opens sheet with all sections in Hindi',
       (tester) async {
     final prefs = FakeLanguageSettingsPrefs();
     await tester.pumpWidget(
@@ -46,6 +47,40 @@ void main() {
           ),
           voiceLanguagePrefsProvider
               .overrideWithValue(FakeVoiceLanguagePrefs('hi')),
+          languageSettingsPrefsProvider.overrideWithValue(prefs),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: LanguageSettingsButton()),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.translate));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final s = AppStrings('hi');
+    expect(find.text(s.languageSettings), findsOneWidget);
+    expect(find.text(s.autoDetectLabel), findsOneWidget);
+    expect(find.text(s.globalVoiceLanguage), findsOneWidget);
+    expect(find.text(s.messageLanguage), findsOneWidget);
+    expect(find.text(s.globalLanguage), findsOneWidget);
+  });
+
+  testWidgets('language settings button opens sheet in English',
+      (tester) async {
+    final prefs = FakeLanguageSettingsPrefs();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          voiceApiProvider.overrideWithValue(
+            FakeVoiceApi(languages: const [
+              VoiceLanguage(code: 'en', name: 'English'),
+              VoiceLanguage(code: 'hi', name: 'Hindi'),
+            ]),
+          ),
+          voiceLanguagePrefsProvider
+              .overrideWithValue(FakeVoiceLanguagePrefs('en')),
           languageSettingsPrefsProvider.overrideWithValue(prefs),
         ],
         child: const MaterialApp(

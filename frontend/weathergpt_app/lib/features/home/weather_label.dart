@@ -1,3 +1,5 @@
+import '../../l10n/app_strings.dart';
+
 /// Human-readable condition text for an Open-Meteo WMO `weather_code`.
 ///
 /// Lives here rather than beside [weatherIconFor] because
@@ -8,7 +10,8 @@
 ///
 /// Codes come from the WMO 4677 table as Open-Meteo publishes it; the
 /// backend passes them through untouched (see backend/app/weather.py).
-String weatherLabelFor(int weatherCode) {
+String weatherLabelFor(int weatherCode, [AppStrings? s]) {
+  if (s != null) return s.weatherLabel(weatherCode);
   switch (weatherCode) {
     case 0:
       return 'Clear sky';

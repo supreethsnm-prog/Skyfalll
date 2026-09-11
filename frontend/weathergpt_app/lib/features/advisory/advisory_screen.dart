@@ -18,16 +18,9 @@ import '../chat/chat_controller.dart';
 import '../home/home_controller.dart';
 import '../home/widgets/alert_banner.dart';
 import '../shell/app_drawer.dart';
+import '../../l10n/app_strings.dart';
 import 'advisory_controller.dart';
 import 'risk_band.dart';
-
-const _crops = <(String? value, String label)>[
-  (null, 'All'),
-  ('rice', 'Rice'),
-  ('wheat', 'Wheat'),
-  ('cotton', 'Cotton'),
-  ('sugarcane', 'Sugarcane'),
-];
 
 /// Agriculture and urban advisories for the location Home is currently
 /// showing — the app's one screen dedicated to the problem statement it
@@ -109,6 +102,7 @@ class _AdvisoryScreenState extends ConsumerState<AdvisoryScreen> {
 
     final homeState = ref.watch(homeControllerProvider);
     final advisoryState = ref.watch(advisoryControllerProvider);
+    final s = ref.watch(uiStringsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bgBase,
@@ -124,13 +118,13 @@ class _AdvisoryScreenState extends ConsumerState<AdvisoryScreen> {
                   Builder(
                     builder: (context) => RoundIconButton(
                       icon: Icons.menu,
-                      tooltip: 'Open menu',
+                      tooltip: s.openMenu,
                       onPressed: () => Scaffold.of(context).openDrawer(),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Text(
-                    'Advisories',
+                    s.advisories,
                     style: AppTypography.title(AppColors.textPrimary),
                   ),
                 ],
@@ -226,6 +220,7 @@ class _LoadedView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return RefreshIndicator(
       onRefresh: () => ref.read(advisoryControllerProvider.notifier).retry(),
       color: AppColors.textPrimary,
@@ -246,7 +241,7 @@ class _LoadedView extends ConsumerWidget {
               style: AppTypography.body(AppColors.textSecondary),
             ),
             const SizedBox(height: AppSpacing.lg),
-            Text('Urban risk', style: AppTypography.label(AppColors.textPrimary)),
+            Text(s.urbanRisk, style: AppTypography.label(AppColors.textPrimary)),
             const SizedBox(height: AppSpacing.sm),
             _UrbanRiskRow(riskSummary: state.urban.riskSummary),
             const SizedBox(height: AppSpacing.xxl),
@@ -256,10 +251,10 @@ class _LoadedView extends ConsumerWidget {
             // underpasses, loose hoardings — to farming. The crop chips
             // filter only the agriculture half, so they carry their own
             // label rather than heading the whole section.
-            Text('Advisories', style: AppTypography.label(AppColors.textPrimary)),
+            Text(s.advisories, style: AppTypography.label(AppColors.textPrimary)),
             const SizedBox(height: AppSpacing.md),
             Text(
-              'Filter crop advice',
+              s.filterCropAdvice,
               style: AppTypography.caption(AppColors.textSecondary),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -294,19 +289,20 @@ class _LoadedView extends ConsumerWidget {
 /// severity ramp via [capSeverityForRiskBand] — see that function for why
 /// an unrecognised band (including the backend's own `UNKNOWN`) must NOT
 /// be coloured as if it were a real, known-safe band.
-class _UrbanRiskRow extends StatelessWidget {
+class _UrbanRiskRow extends ConsumerWidget {
   const _UrbanRiskRow({required this.riskSummary});
 
   final UrbanRiskSummary riskSummary;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Row(
       children: [
         Expanded(
           child: _RiskTile(
             icon: Icons.water_damage_outlined,
-            label: 'Waterlogging',
+            label: s.waterlogging,
             band: riskSummary.waterloggingRisk,
           ),
         ),
@@ -314,7 +310,7 @@ class _UrbanRiskRow extends StatelessWidget {
         Expanded(
           child: _RiskTile(
             icon: Icons.thermostat,
-            label: 'Heat',
+            label: s.heat,
             band: riskSummary.heatRisk,
           ),
         ),
@@ -322,7 +318,7 @@ class _UrbanRiskRow extends StatelessWidget {
         Expanded(
           child: _RiskTile(
             icon: Icons.air,
-            label: 'Wind',
+            label: s.wind,
             band: riskSummary.windRisk,
           ),
         ),
@@ -331,8 +327,9 @@ class _UrbanRiskRow extends StatelessWidget {
   }
 }
 
-class _RiskTile extends StatelessWidget {
+class _RiskTile extends ConsumerWidget {
   const _RiskTile({
+    super.key,
     required this.icon,
     required this.label,
     required this.band,
@@ -346,8 +343,25 @@ class _RiskTile extends StatelessWidget {
       ? value
       : '${value[0]}${value.substring(1).toLowerCase()}';
 
+  static String _localizedBand(String band, AppStrings s) {
+    switch (band.toUpperCase()) {
+      case 'LOW':
+        return s.riskLow;
+      case 'MODERATE':
+        return s.riskModerate;
+      case 'HIGH':
+        return s.riskHigh;
+      case 'SEVERE':
+      case 'EXTREME':
+        return s.riskExtreme;
+      default:
+        return _titleCase(band);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     final capSeverity = capSeverityForRiskBand(band);
     // No mapping (including the backend's own UNKNOWN) renders as a plain,
     // neutral tile — never as one of the four real severity colours, which
@@ -358,9 +372,10 @@ class _RiskTile extends StatelessWidget {
     final foreground = capSeverity == null
         ? AppColors.textPrimary
         : AppColors.onAlertSeverity(capSeverity);
+    final displayedBand = _localizedBand(band, s);
 
     return Semantics(
-      label: '$label risk: ${_titleCase(band)}',
+      label: '$label risk: $displayedBand',
       child: ExcludeSemantics(
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -376,7 +391,7 @@ class _RiskTile extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               Text(label, style: AppTypography.caption(foreground)),
               const SizedBox(height: AppSpacing.xs),
-              Text(_titleCase(band), style: AppTypography.body(foreground)),
+              Text(displayedBand, style: AppTypography.body(foreground)),
             ],
           ),
         ),
@@ -385,19 +400,27 @@ class _RiskTile extends StatelessWidget {
   }
 }
 
-class _CropChips extends StatelessWidget {
-  const _CropChips({required this.selected, required this.onSelected});
+class _CropChips extends ConsumerWidget {
+  const _CropChips({super.key, required this.selected, required this.onSelected});
 
   final String? selected;
   final ValueChanged<String?> onSelected;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
+    final cropOptions = <(String? value, String label)>[
+      (null, s.allCrops),
+      ('rice', s.rice),
+      ('wheat', s.wheat),
+      ('cotton', s.cotton),
+      ('sugarcane', s.sugarcane),
+    ];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          for (final (value, label) in _crops) ...[
+          for (final (value, label) in cropOptions) ...[
             _CropChip(
               label: label,
               selected: selected == value,
@@ -492,7 +515,7 @@ class _AdvisoryRow extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
-            child: Text(text, style: AppTypography.body(AppColors.textPrimary)),
+            child: DynamicText(text, style: AppTypography.body(AppColors.textPrimary)),
           ),
         ],
       ),
@@ -511,6 +534,7 @@ class _EmptyAdvisories extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -528,7 +552,7 @@ class _EmptyAdvisories extends ConsumerWidget {
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Text(
-                  'No advisories for this area — conditions look normal.',
+                  s.noAdvisoriesArea,
                   style: AppTypography.body(AppColors.textSecondary),
                 ),
               ),
@@ -559,7 +583,7 @@ class _EmptyAdvisories extends ConsumerWidget {
               vertical: AppSpacing.md,
             ),
           ),
-          child: Text('Ask a question', style: AppTypography.body(AppColors.textPrimary)),
+          child: Text(s.askQuestion, style: AppTypography.body(AppColors.textPrimary)),
         ),
       ],
     );
@@ -570,21 +594,22 @@ class _EmptyAdvisories extends ConsumerWidget {
 /// default and visually secondary — this is provenance for anyone who
 /// wants to check it, not something that competes with the advisories
 /// themselves for attention.
-class _BasedOnSection extends StatefulWidget {
-  const _BasedOnSection({required this.days});
+class _BasedOnSection extends ConsumerStatefulWidget {
+  const _BasedOnSection({super.key, required this.days});
 
   final List<ForecastDay> days;
 
   @override
-  State<_BasedOnSection> createState() => _BasedOnSectionState();
+  ConsumerState<_BasedOnSection> createState() => _BasedOnSectionState();
 }
 
-class _BasedOnSectionState extends State<_BasedOnSection> {
+class _BasedOnSectionState extends ConsumerState<_BasedOnSection> {
   bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
     if (widget.days.isEmpty) return const SizedBox.shrink();
+    final s = ref.watch(uiStringsProvider);
 
     return GlassPanel(
       child: Column(
@@ -607,7 +632,7 @@ class _BasedOnSectionState extends State<_BasedOnSection> {
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
-                        'Based on the forecast',
+                        s.basedOnForecast,
                         style: AppTypography.label(AppColors.textSecondary),
                       ),
                     ),
@@ -665,14 +690,15 @@ class _BasedOnRow extends StatelessWidget {
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
+class _ErrorView extends ConsumerWidget {
+  const _ErrorView({super.key, required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Container(
@@ -691,7 +717,7 @@ class _ErrorView extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              "Couldn't load advisories",
+              s.couldNotLoadAdvisories,
               style: AppTypography.title(AppColors.textPrimary),
               textAlign: TextAlign.center,
             ),
@@ -713,7 +739,7 @@ class _ErrorView extends StatelessWidget {
                 ),
               ),
               child: Text(
-                'Try again',
+                s.tryAgain,
                 style: AppTypography.body(AppColors.textPrimary),
               ),
             ),

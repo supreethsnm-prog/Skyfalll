@@ -8,6 +8,7 @@ import '../../data/alerts_api.dart';
 import '../../data/geocoding_api.dart';
 import '../../shared/error_message.dart';
 import '../../shared/widgets/round_icon_button.dart';
+import '../../l10n/app_strings.dart';
 import '../home/home_controller.dart';
 import '../home/widgets/alert_banner.dart';
 import '../shell/app_drawer.dart';
@@ -77,6 +78,7 @@ class _AlertHistoryScreenState extends ConsumerState<AlertHistoryScreen> {
     });
 
     final state = ref.watch(alertHistoryControllerProvider);
+    final s = ref.watch(uiStringsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bgBase,
@@ -92,12 +94,12 @@ class _AlertHistoryScreenState extends ConsumerState<AlertHistoryScreen> {
                   Builder(
                     builder: (context) => RoundIconButton(
                       icon: Icons.menu,
-                      tooltip: 'Open menu',
+                      tooltip: s.openMenu,
                       onPressed: () => Scaffold.of(context).openDrawer(),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
-                  Text('Alerts', style: AppTypography.title(AppColors.textPrimary)),
+                  Text(s.alerts, style: AppTypography.title(AppColors.textPrimary)),
                 ],
               ),
             ),
@@ -187,11 +189,12 @@ class _HistoryEntry extends StatelessWidget {
   }
 }
 
-class _EmptyView extends StatelessWidget {
+class _EmptyView extends ConsumerWidget {
   const _EmptyView();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl),
       child: Column(
@@ -200,14 +203,13 @@ class _EmptyView extends StatelessWidget {
           const Icon(Icons.check_circle_outline, size: 40, color: AppColors.textPrimary),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'No alerts nearby this week',
+            s.noAlertsNearby,
             style: AppTypography.title(AppColors.textPrimary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            "Nothing from IMD/SACHET has affected this area in the past "
-            '$alertHistoryWindowDays days.',
+            s.noAlertsAffecting,
             style: AppTypography.label(AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
@@ -217,14 +219,15 @@ class _EmptyView extends StatelessWidget {
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
+class _ErrorView extends ConsumerWidget {
+  const _ErrorView({super.key, required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Container(
@@ -237,7 +240,7 @@ class _ErrorView extends StatelessWidget {
             const Icon(Icons.cloud_off, size: 40, color: AppColors.textPrimary),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              "Couldn't load alert history",
+              s.couldNotLoadAlertHistory,
               style: AppTypography.title(AppColors.textPrimary),
               textAlign: TextAlign.center,
             ),
@@ -259,7 +262,7 @@ class _ErrorView extends StatelessWidget {
                 ),
               ),
               child: Text(
-                'Try again',
+                s.tryAgain,
                 style: AppTypography.body(AppColors.textPrimary),
               ),
             ),

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/weather_api.dart';
+import '../../../l10n/app_strings.dart';
 import '../weather_label.dart';
 
 /// The Home screen's headline block, per `Home1.jpeg`: place name, a very
@@ -14,7 +16,7 @@ import '../weather_label.dart';
 /// rather than read here: the caller is the only thing that knows which
 /// sky is behind this, and the whole WCAG contract depends on that one
 /// decision being made in one place.
-class HomeHero extends StatelessWidget {
+class HomeHero extends ConsumerWidget {
   const HomeHero({
     super.key,
     required this.place,
@@ -39,7 +41,8 @@ class HomeHero extends StatelessWidget {
   final VoidCallback? onTapPlace;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -50,7 +53,7 @@ class HomeHero extends StatelessWidget {
         // label would not.
         Semantics(
           button: onTapPlace != null,
-          label: 'Change location. Currently $place',
+          label: '${s.changeLocation}. Currently $place',
           child: ExcludeSemantics(
             child: InkWell(
               onTap: onTapPlace,
@@ -85,7 +88,7 @@ class HomeHero extends StatelessWidget {
           style: AppTypography.hero(foreground),
         ),
         Text(
-          weatherLabelFor(weather.weatherCode),
+          weatherLabelFor(weather.weatherCode, s),
           style: AppTypography.body(foreground),
         ),
         if (high != null && low != null) ...[

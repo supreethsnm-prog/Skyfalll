@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../l10n/app_strings.dart';
 import '../../shared/widgets/app_menu.dart';
 import '../../shared/widgets/round_icon_button.dart';
 import '../chat/chat_controller.dart';
@@ -35,6 +36,7 @@ class AppDrawer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     final conversations = ref.watch(conversationsProvider);
     final titles =
         recents ?? conversations.map((c) => c.title).toList(growable: false);
@@ -55,7 +57,7 @@ class AppDrawer extends ConsumerWidget {
                 children: [
                   _NavEntry(
                     icon: Icons.wb_sunny_outlined,
-                    label: 'Home',
+                    label: s.home,
                     selected: activeRoute == '/home',
                     onTap: () {
                       Navigator.of(context).pop();
@@ -64,7 +66,7 @@ class AppDrawer extends ConsumerWidget {
                   ),
                   _NavEntry(
                     icon: Icons.add_comment_outlined,
-                    label: 'New chat',
+                    label: s.newChat,
                     selected: activeRoute == '/chat',
                     onTap: () {
                       Navigator.of(context).pop();
@@ -75,7 +77,7 @@ class AppDrawer extends ConsumerWidget {
                   ),
                   _NavEntry(
                     icon: Icons.agriculture_outlined,
-                    label: 'Advisories',
+                    label: s.advisories,
                     selected: activeRoute == '/advisories',
                     onTap: () {
                       Navigator.of(context).pop();
@@ -84,7 +86,7 @@ class AppDrawer extends ConsumerWidget {
                   ),
                   _NavEntry(
                     icon: Icons.flight_outlined,
-                    label: 'Aviation',
+                    label: s.aviation,
                     selected: activeRoute == '/aviation',
                     onTap: () {
                       Navigator.of(context).pop();
@@ -93,7 +95,7 @@ class AppDrawer extends ConsumerWidget {
                   ),
                   _NavEntry(
                     icon: Icons.sailing_outlined,
-                    label: 'Fishing zones',
+                    label: s.fishingZones,
                     selected: activeRoute == '/marine',
                     onTap: () {
                       Navigator.of(context).pop();
@@ -102,7 +104,7 @@ class AppDrawer extends ConsumerWidget {
                   ),
                   _NavEntry(
                     icon: Icons.history,
-                    label: 'Historical',
+                    label: s.historical,
                     selected: activeRoute == '/historical',
                     onTap: () {
                       Navigator.of(context).pop();
@@ -111,7 +113,7 @@ class AppDrawer extends ConsumerWidget {
                   ),
                   _NavEntry(
                     icon: Icons.explore_outlined,
-                    label: 'Discover',
+                    label: s.discover,
                     selected: activeRoute == '/discover',
                     onTap: () {
                       Navigator.of(context).pop();
@@ -120,7 +122,7 @@ class AppDrawer extends ConsumerWidget {
                   ),
                   _NavEntry(
                     icon: Icons.warning_amber_rounded,
-                    label: 'Alerts',
+                    label: s.alerts,
                     selected: activeRoute == '/alerts',
                     onTap: () {
                       Navigator.of(context).pop();
@@ -129,14 +131,14 @@ class AppDrawer extends ConsumerWidget {
                   ),
                   _NavEntry(
                     icon: Icons.bookmark_border,
-                    label: 'Saved places',
+                    label: s.savedPlaces,
                     selected: activeRoute == '/saved',
                     onTap: () {
                       Navigator.of(context).pop();
                       context.go('/saved');
                     },
                   ),
-                  const                   _SectionLabel('Recents'),
+                  _SectionLabel(s.recents),
                   if (titles.isEmpty)
                     const _EmptyRecents()
                   else
@@ -173,13 +175,14 @@ class AppDrawer extends ConsumerWidget {
   void _showDeleteMenu(BuildContext context, WidgetRef ref, int index) {
     final conversations = ref.read(conversationsProvider);
     if (index >= conversations.length) return;
+    final s = ref.read(uiStringsProvider);
 
     showAppMenu(
       context: context,
       items: [
         AppMenuItem(
           icon: Icons.delete_outline,
-          label: 'Delete',
+          label: s.delete,
           destructive: true,
           onTap: () {
             ref.read(chatControllerProvider.notifier).startNew();
@@ -191,11 +194,12 @@ class AppDrawer extends ConsumerWidget {
   }
 }
 
-class _DrawerHeader extends StatelessWidget {
+class _DrawerHeader extends ConsumerWidget {
   const _DrawerHeader();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -224,7 +228,7 @@ class _DrawerHeader extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           RoundIconButton(
             icon: Icons.search,
-            tooltip: 'Search chats',
+            tooltip: s.searchChats,
             onPressed: () {},
           ),
         ],
@@ -318,35 +322,37 @@ class _NavEntry extends StatelessWidget {
   }
 }
 
-class _EmptyRecents extends StatelessWidget {
+class _EmptyRecents extends ConsumerWidget {
   const _EmptyRecents();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // An empty screen is an invitation to act, not an apology. Nothing
     // persists conversations yet, so this says what will appear here
     // rather than pretending there is history.
+    final s = ref.watch(uiStringsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
         vertical: AppSpacing.sm,
       ),
       child: Text(
-        'Your conversations will appear here.',
+        s.emptyRecentsHint,
         style: AppTypography.label(AppColors.textSecondary),
       ),
     );
   }
 }
 
-class _AccountRow extends StatelessWidget {
+class _AccountRow extends ConsumerWidget {
   const _AccountRow();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Semantics(
       button: true,
-      label: 'Your account',
+      label: s.yourAccount,
       child: ExcludeSemantics(
         child: InkWell(
           onTap: () {},
@@ -370,7 +376,7 @@ class _AccountRow extends StatelessWidget {
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Text(
-                    'Your account',
+                    s.yourAccount,
                     style: AppTypography.body(AppColors.textPrimary),
                   ),
                 ),

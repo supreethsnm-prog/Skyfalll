@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/nwp_api.dart';
+import '../../../l10n/app_strings.dart';
 import '../../../shared/widgets/glass_panel.dart';
 import '../nwp_bands.dart';
 
@@ -21,15 +23,22 @@ import '../nwp_bands.dart';
 /// ingestion has not populated the table yet, and must read as "not
 /// available", never as a panel implying calm conditions.
 class SevereWeatherPanel extends StatelessWidget {
-  const SevereWeatherPanel({super.key, required this.nwp, required this.foreground});
+  const SevereWeatherPanel({
+    super.key,
+    required this.nwp,
+    required this.foreground,
+    this.strings,
+  });
 
   final List<NwpPoint>? nwp;
   final Color foreground;
+  final AppStrings? strings;
 
   @override
   Widget build(BuildContext context) {
     final points = nwp;
     if (points == null || points.isEmpty) return const SizedBox.shrink();
+    final s = strings ?? AppStrings('en');
 
     final sorted = [...points]
       ..sort((a, b) => a.forecastHour.compareTo(b.forecastHour));
@@ -47,11 +56,14 @@ class SevereWeatherPanel extends StatelessWidget {
       }
     }
 
+    // Peak gust in the window.
     double? peakGustKmh;
     for (final p in sorted) {
       final gust = p.windGustKmh;
       if (gust == null) continue;
-      if (peakGustKmh == null || gust > peakGustKmh) peakGustKmh = gust;
+      if (peakGustKmh == null || gust > peakGustKmh) {
+        peakGustKmh = gust;
+      }
     }
 
     return GlassPanel(
@@ -59,14 +71,14 @@ class SevereWeatherPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Severe weather', style: AppTypography.label(foreground)),
+          Text(s.severeWeather, style: AppTypography.label(foreground)),
           const SizedBox(height: AppSpacing.md),
           if (peakCapePoint != null) ...[
-            _CapeRow(point: peakCapePoint, foreground: foreground),
+            _CapeRow(point: peakCapePoint, foreground: foreground, s: s),
             const SizedBox(height: AppSpacing.md),
           ],
           if (peakGustKmh != null) ...[
-            _GustRow(gustKmh: peakGustKmh, foreground: foreground),
+            _GustRow(gustKmh: peakGustKmh, foreground: foreground, s: s),
             const SizedBox(height: AppSpacing.md),
           ],
           _NearestConditionsRow(point: nearest, foreground: foreground),
@@ -93,10 +105,15 @@ class SevereWeatherPanel extends StatelessWidget {
 /// dishonest. It is surfaced only as a supporting fact: large negative CIN
 /// next to high CAPE means stored energy that has not been released.
 class _CapeRow extends StatelessWidget {
-  const _CapeRow({required this.point, required this.foreground});
+  const _CapeRow({
+    required this.point,
+    required this.foreground,
+    required this.s,
+  });
 
   final NwpPoint point;
   final Color foreground;
+  final AppStrings s;
 
   @override
   Widget build(BuildContext context) {
@@ -127,7 +144,7 @@ class _CapeRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Convective risk', style: AppTypography.caption(foreground)),
+              Text(s.convectiveRisk, style: AppTypography.caption(foreground)),
               const SizedBox(height: AppSpacing.xs),
               Row(
                 children: [
@@ -166,10 +183,15 @@ class _CapeRow extends StatelessWidget {
 /// threshold — independent of sustained wind speed, which the detail grid
 /// already shows.
 class _GustRow extends StatelessWidget {
-  const _GustRow({required this.gustKmh, required this.foreground});
+  const _GustRow({
+    required this.gustKmh,
+    required this.foreground,
+    required this.s,
+  });
 
   final double gustKmh;
   final Color foreground;
+  final AppStrings s;
 
   @override
   Widget build(BuildContext context) {
@@ -196,7 +218,7 @@ class _GustRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppRadius.panel / 2),
             ),
             child: Text(
-              'Gale',
+              s.gale,
               style: AppTypography.label(AppColors.onAlertSeverity('severe')),
             ),
           ),

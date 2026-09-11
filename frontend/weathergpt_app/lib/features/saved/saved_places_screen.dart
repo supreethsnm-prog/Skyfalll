@@ -14,6 +14,7 @@ import '../../shared/widgets/weather_icon.dart';
 import '../home/home_controller.dart';
 import '../home/weather_label.dart';
 import '../shell/app_drawer.dart';
+import '../../l10n/app_strings.dart';
 import 'saved_places_controller.dart';
 
 /// Current conditions for one saved place.
@@ -38,6 +39,7 @@ class SavedPlacesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final places = ref.watch(savedPlacesProvider);
+    final s = ref.watch(uiStringsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bgBase,
@@ -53,13 +55,13 @@ class SavedPlacesScreen extends ConsumerWidget {
                   Builder(
                     builder: (context) => RoundIconButton(
                       icon: Icons.menu,
-                      tooltip: 'Open menu',
+                      tooltip: s.openMenu,
                       onPressed: () => Scaffold.of(context).openDrawer(),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Text(
-                    'Saved places',
+                    s.savedPlaces,
                     style: AppTypography.title(AppColors.textPrimary),
                   ),
                 ],
@@ -89,11 +91,12 @@ class SavedPlacesScreen extends ConsumerWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
+class _EmptyState extends ConsumerWidget {
   const _EmptyState();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     // Says how to fill the screen rather than just reporting it is empty.
     return Center(
       child: Padding(
@@ -108,12 +111,12 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              'No saved places yet',
+              s.noSavedPlacesYet,
               style: AppTypography.title(AppColors.textPrimary),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Tap the bookmark on any location to keep it here.',
+              s.tapBookmarkHint,
               textAlign: TextAlign.center,
               style: AppTypography.label(AppColors.textSecondary),
             ),
@@ -201,16 +204,17 @@ class _PlaceCard extends ConsumerWidget {
   }
 }
 
-class _Subtitle extends StatelessWidget {
+class _Subtitle extends ConsumerWidget {
   const _Subtitle({required this.weather, required this.foreground});
 
   final AsyncValue<CurrentWeather> weather;
   final Color foreground;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     final text = weather.when(
-      data: (w) => '${weatherLabelFor(w.weatherCode)} · '
+      data: (w) => '${weatherLabelFor(w.weatherCode, s)} · '
           '${w.humidityPct.round()}% · ${w.windSpeedKmh.round()} km/h',
       loading: () => 'Loading…',
       // The place is still usable even if its weather did not load, so

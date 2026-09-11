@@ -7,6 +7,7 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/geocoding_api.dart';
+import '../../../l10n/app_strings.dart';
 import '../../../shared/error_message.dart';
 import '../home_controller.dart';
 
@@ -142,6 +143,7 @@ class _LocationSearchSheetState extends ConsumerState<LocationSearchSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(uiStringsProvider);
     return Padding(
       // Lifts the sheet clear of the keyboard, which otherwise covers the
       // very result the user is reaching for.
@@ -167,17 +169,21 @@ class _LocationSearchSheetState extends ConsumerState<LocationSearchSheet> {
                 ),
               ),
               Text(
-                'Change location',
+                s.changeLocation,
                 style: AppTypography.title(AppColors.textPrimary),
               ),
               const SizedBox(height: AppSpacing.lg),
               _SearchField(
                 controller: _controller,
                 onSubmitted: _search,
+                hintText: s.searchCityOrDistrict,
               ),
               if (widget.onSelected == null && widget.showUseMyLocation) ...[
                 const SizedBox(height: AppSpacing.md),
-                _UseMyLocationRow(onTap: _useDeviceLocation),
+                _UseMyLocationRow(
+                  onTap: _useDeviceLocation,
+                  label: s.useMyLocation,
+                ),
               ],
               const SizedBox(height: AppSpacing.sm),
               _Outcome(state: _state, onChoose: _choose),
@@ -189,11 +195,17 @@ class _LocationSearchSheetState extends ConsumerState<LocationSearchSheet> {
   }
 }
 
+
 class _SearchField extends StatelessWidget {
-  const _SearchField({required this.controller, required this.onSubmitted});
+  const _SearchField({
+    required this.controller,
+    required this.onSubmitted,
+    required this.hintText,
+  });
 
   final TextEditingController controller;
   final VoidCallback onSubmitted;
+  final String hintText;
 
   @override
   Widget build(BuildContext context) {
@@ -222,7 +234,7 @@ class _SearchField extends StatelessWidget {
               cursorColor: AppColors.accent,
               decoration: InputDecoration(
                 isDense: true,
-                hintText: 'Search a city or district',
+                hintText: hintText,
                 hintStyle: AppTypography.body(AppColors.textSecondary),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
@@ -237,15 +249,16 @@ class _SearchField extends StatelessWidget {
 }
 
 class _UseMyLocationRow extends StatelessWidget {
-  const _UseMyLocationRow({required this.onTap});
+  const _UseMyLocationRow({required this.onTap, required this.label});
 
   final VoidCallback onTap;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Use my location',
+      label: label,
       child: ExcludeSemantics(
         child: InkWell(
           onTap: onTap,
@@ -264,7 +277,7 @@ class _UseMyLocationRow extends StatelessWidget {
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Text(
-                  'Use my location',
+                  label,
                   style: AppTypography.body(AppColors.accent),
                 ),
               ],

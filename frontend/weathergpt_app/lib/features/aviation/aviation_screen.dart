@@ -9,6 +9,7 @@ import '../../data/geocoding_api.dart';
 import '../../data/metar_api.dart';
 import '../../shared/error_message.dart';
 import '../../shared/widgets/round_icon_button.dart';
+import '../../l10n/app_strings.dart';
 import '../chat/widgets/code_block.dart';
 import '../home/home_controller.dart';
 import '../shell/app_drawer.dart';
@@ -96,6 +97,7 @@ class _AviationScreenState extends ConsumerState<AviationScreen> {
 
     final homeState = ref.watch(homeControllerProvider);
     final aviationState = ref.watch(aviationControllerProvider);
+    final s = ref.watch(uiStringsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bgBase,
@@ -111,13 +113,13 @@ class _AviationScreenState extends ConsumerState<AviationScreen> {
                   Builder(
                     builder: (context) => RoundIconButton(
                       icon: Icons.menu,
-                      tooltip: 'Open menu',
+                      tooltip: s.openMenu,
                       onPressed: () => Scaffold.of(context).openDrawer(),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Text(
-                    'Aviation',
+                    s.aviation,
                     style: AppTypography.title(AppColors.textPrimary),
                   ),
                 ],
@@ -202,8 +204,9 @@ class _Body extends ConsumerWidget {
 /// Airport name, distance from Home, and the picker button — shown above
 /// both the loaded observation and the "no observation" state, since both
 /// know which airport and how far away it is.
-class _AirportHeader extends StatelessWidget {
+class _AirportHeader extends ConsumerWidget {
   const _AirportHeader({
+    super.key,
     required this.airport,
     required this.distanceKm,
     required this.onSelectAirport,
@@ -216,7 +219,8 @@ class _AirportHeader extends StatelessWidget {
   final ValueChanged<Airport> onSelectAirport;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -251,11 +255,11 @@ class _AirportHeader extends StatelessWidget {
         const SizedBox(width: AppSpacing.md),
         Semantics(
           button: true,
-          label: 'Choose a different airport',
+          label: s.chooseDifferentAirport,
           child: ExcludeSemantics(
             child: TextButton(
               onPressed: () =>
-                  showAirportPicker(context, airport, onSelectAirport),
+                  showAirportPicker(context, airport, onSelectAirport, s),
               style: TextButton.styleFrom(
                 foregroundColor: AppColors.textPrimary,
                 side: const BorderSide(color: AppColors.divider),
@@ -264,7 +268,7 @@ class _AirportHeader extends StatelessWidget {
                   vertical: AppSpacing.sm,
                 ),
               ),
-              child: Text('Change', style: AppTypography.body(AppColors.textPrimary)),
+              child: Text(s.change, style: AppTypography.body(AppColors.textPrimary)),
             ),
           ),
         ),
@@ -275,6 +279,7 @@ class _AirportHeader extends StatelessWidget {
 
 class _LoadedView extends ConsumerWidget {
   const _LoadedView({
+    super.key,
     required this.state,
     required this.onSelectAirport,
     this.now,
@@ -288,6 +293,7 @@ class _LoadedView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final reading = state.reading;
+    final s = ref.watch(uiStringsProvider);
 
     return RefreshIndicator(
       onRefresh: () => ref.read(aviationControllerProvider.notifier).retry(),
@@ -320,7 +326,7 @@ class _LoadedView extends ConsumerWidget {
             const SizedBox(height: AppSpacing.lg),
             _StatsGrid(reading: reading),
             const SizedBox(height: AppSpacing.xl),
-            Text('Raw report', style: AppTypography.label(AppColors.textPrimary)),
+            Text(s.rawReport, style: AppTypography.label(AppColors.textPrimary)),
             const SizedBox(height: AppSpacing.sm),
             // The actual encoded observation, verbatim — what a pilot
             // reads, and proof the data is real. Reuses the chat
@@ -337,13 +343,14 @@ class _LoadedView extends ConsumerWidget {
 /// [capSeverityForFlightCategory] — see that function for why an
 /// unrecognised or missing category must NOT be coloured as if it were a
 /// known-good one.
-class _CategoryBanner extends StatelessWidget {
-  const _CategoryBanner({required this.category});
+class _CategoryBanner extends ConsumerWidget {
+  const _CategoryBanner({super.key, required this.category});
 
   final String? category;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     final capSeverity = capSeverityForFlightCategory(category);
     final background = capSeverity == null
         ? AppColors.surfaceRaised
@@ -357,7 +364,7 @@ class _CategoryBanner extends StatelessWidget {
     final label = category ?? 'Not reported';
 
     return Semantics(
-      label: 'Flight category: $label',
+      label: '${s.flightCategory}: $label',
       child: ExcludeSemantics(
         child: Container(
           width: double.infinity,
@@ -370,7 +377,7 @@ class _CategoryBanner extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Flight category', style: AppTypography.caption(foreground)),
+              Text(s.flightCategory, style: AppTypography.caption(foreground)),
               const SizedBox(height: AppSpacing.xs),
               Text(label, style: AppTypography.title(foreground)),
             ],
@@ -543,8 +550,9 @@ class _StatTile extends StatelessWidget {
   }
 }
 
-class _NotFoundView extends StatelessWidget {
+class _NotFoundView extends ConsumerWidget {
   const _NotFoundView({
+    super.key,
     required this.airport,
     required this.distanceKm,
     required this.onSelectAirport,
@@ -555,7 +563,8 @@ class _NotFoundView extends StatelessWidget {
   final ValueChanged<Airport> onSelectAirport;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(
@@ -586,7 +595,7 @@ class _NotFoundView extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   Text(
-                    'No current observation for this station',
+                    s.noCurrentObservation,
                     style: AppTypography.title(AppColors.textPrimary),
                     textAlign: TextAlign.center,
                   ),
@@ -608,14 +617,15 @@ class _NotFoundView extends StatelessWidget {
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
+class _ErrorView extends ConsumerWidget {
+  const _ErrorView({super.key, required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Container(
@@ -634,7 +644,7 @@ class _ErrorView extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              "Couldn't load the observation",
+              s.couldNotLoadObservation,
               style: AppTypography.title(AppColors.textPrimary),
               textAlign: TextAlign.center,
             ),
@@ -656,7 +666,7 @@ class _ErrorView extends StatelessWidget {
                 ),
               ),
               child: Text(
-                'Try again',
+                s.tryAgain,
                 style: AppTypography.body(AppColors.textPrimary),
               ),
             ),
@@ -672,8 +682,9 @@ class _ErrorView extends StatelessWidget {
 Future<void> showAirportPicker(
   BuildContext context,
   Airport selected,
-  ValueChanged<Airport> onSelect,
-) {
+  ValueChanged<Airport> onSelect, [
+  AppStrings? strings,
+]) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AppColors.bgBase,
@@ -681,18 +692,28 @@ Future<void> showAirportPicker(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.panel)),
     ),
-    builder: (_) => _AirportPickerSheet(selected: selected, onSelect: onSelect),
+    builder: (_) => _AirportPickerSheet(
+      selected: selected,
+      onSelect: onSelect,
+      strings: strings,
+    ),
   );
 }
 
 class _AirportPickerSheet extends StatelessWidget {
-  const _AirportPickerSheet({required this.selected, required this.onSelect});
+  const _AirportPickerSheet({
+    required this.selected,
+    required this.onSelect,
+    this.strings,
+  });
 
   final Airport selected;
   final ValueChanged<Airport> onSelect;
+  final AppStrings? strings;
 
   @override
   Widget build(BuildContext context) {
+    final s = strings ?? AppStrings('en');
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -711,7 +732,7 @@ class _AirportPickerSheet extends StatelessWidget {
                 ),
               ),
             ),
-            Text('Choose an airport', style: AppTypography.title(AppColors.textPrimary)),
+            Text(s.chooseAirport, style: AppTypography.title(AppColors.textPrimary)),
             const SizedBox(height: AppSpacing.md),
             Flexible(
               child: ListView(

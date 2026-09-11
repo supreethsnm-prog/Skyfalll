@@ -18,6 +18,7 @@ import '../shell/app_drawer.dart';
 import '../../shared/widgets/app_menu.dart';
 import '../../shared/widgets/language_settings_button.dart';
 import '../../shared/widgets/round_icon_button.dart';
+import '../../l10n/app_strings.dart';
 import 'home_controller.dart';
 import 'widgets/alert_banner.dart';
 import 'widgets/detail_tiles.dart';
@@ -156,6 +157,7 @@ class _Chrome extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final current = place;
+    final s = ref.watch(uiStringsProvider);
     final isSaved =
         current != null && ref.watch(savedPlacesProvider.notifier).isSaved(current);
     return Padding(
@@ -165,7 +167,7 @@ class _Chrome extends ConsumerWidget {
         children: [
           RoundIconButton(
             icon: Icons.menu,
-            tooltip: 'Open menu',
+            tooltip: s.openMenu,
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
           Row(
@@ -195,13 +197,13 @@ class _Chrome extends ConsumerWidget {
               ],
               RoundIconButton(
                 icon: Icons.search,
-                tooltip: 'Search location',
+                tooltip: s.searchLocation,
                 onPressed: () => showLocationSearch(context),
               ),
               const SizedBox(width: AppSpacing.sm),
               RoundIconButton(
                 icon: Icons.add,
-                tooltip: 'New chat',
+                tooltip: s.newChat,
                 onPressed: () => context.go('/chat'),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -210,7 +212,7 @@ class _Chrome extends ConsumerWidget {
               Builder(
                 builder: (context) => RoundIconButton(
                   icon: Icons.more_vert,
-                  tooltip: 'More options',
+                  tooltip: s.moreOptions,
                   onPressed: () => showAppMenu(
                     context: context,
                     // Home shows a reduced set: most of the reference menu's
@@ -219,22 +221,22 @@ class _Chrome extends ConsumerWidget {
                     items: [
                       AppMenuItem(
                         icon: Icons.ios_share,
-                        label: 'Share',
+                        label: s.share,
                         onTap: () {},
                       ),
                       AppMenuItem(
                         icon: Icons.place_outlined,
-                        label: 'Change location',
+                        label: s.changeLocation,
                         onTap: () => showLocationSearch(context),
                       ),
                       AppMenuItem(
                         icon: Icons.bookmark_border,
-                        label: 'Saved places',
+                        label: s.savedPlaces,
                         onTap: () => context.go('/saved'),
                       ),
                       AppMenuItem(
                         icon: Icons.settings_outlined,
-                        label: 'Settings',
+                        label: s.settings,
                         onTap: () {},
                       ),
                     ],
@@ -292,6 +294,7 @@ class _LoadedView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final today = state.forecast.isNotEmpty ? state.forecast.first : null;
+    final s = ref.watch(uiStringsProvider);
 
     return RefreshIndicator(
       // Re-resolves the device position as well as the data: on a screen
@@ -301,11 +304,11 @@ class _LoadedView extends ConsumerWidget {
           ref.read(homeControllerProvider.notifier).useCurrentLocation(),
       color: AppColors.textPrimary,
       backgroundColor: AppColors.surfaceRaised,
-      child: _scrollView(context, today),
+      child: _scrollView(context, today, s),
     );
   }
 
-  Widget _scrollView(BuildContext context, ForecastDay? today) {
+  Widget _scrollView(BuildContext context, ForecastDay? today, AppStrings s) {
     return SingleChildScrollView(
       // Always scrollable, so the pull gesture is available even when the
       // content is short enough to fit — otherwise refresh silently stops
@@ -362,6 +365,7 @@ class _LoadedView extends ConsumerWidget {
             HourlyPanel(
               hours: state.weather.hourly!,
               foreground: foreground,
+              strings: s,
             ),
             const SizedBox(height: AppSpacing.md),
           ],
@@ -374,14 +378,20 @@ class _LoadedView extends ConsumerWidget {
             foreground: foreground,
             uvIndexMax: today?.uvIndexMax,
             airQuality: state.airQuality,
+            strings: s,
           ),
           const SizedBox(height: AppSpacing.md),
-          SevereWeatherPanel(nwp: state.nwp, foreground: foreground),
+          SevereWeatherPanel(
+            nwp: state.nwp,
+            foreground: foreground,
+            strings: s,
+          ),
           const SizedBox(height: AppSpacing.md),
           SunPanel(
             foreground: foreground,
             sunrise: today?.sunrise,
             sunset: today?.sunset,
+            strings: s,
           ),
         ],
       ),
@@ -401,25 +411,26 @@ class _LocationNotice extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     // Each case gets the remedy that actually works. Re-prompting after a
     // permanent denial silently no-ops at the OS level, so that case must
     // send the user to settings instead.
     final (String message, String action) = switch (failure) {
       LocationFailure.serviceDisabled => (
           'Location is turned off.',
-          'Settings',
+          s.settings,
         ),
       LocationFailure.permissionDeniedForever => (
           'Location permission is blocked.',
-          'Settings',
+          s.settings,
         ),
       LocationFailure.permissionDenied => (
           'Showing New Delhi.',
-          'Use my location',
+          s.useMyLocation,
         ),
       LocationFailure.unavailable => (
-          "Couldn't get a location fix.",
-          'Retry',
+          s.couldNotGetLocation,
+          s.retry,
         ),
     };
 
@@ -464,13 +475,14 @@ class _LocationNotice extends ConsumerWidget {
 /// (SACHET-IMD-NOWCAST, SACHET-SDMA) are Indian government sources and do
 /// not cover Nepal. A caption, not a warning — this is a coverage fact, not
 /// something wrong with the screen.
-class _AlertCoverageNotice extends StatelessWidget {
+class _AlertCoverageNotice extends ConsumerWidget {
   const _AlertCoverageNotice({required this.foreground});
 
   final Color foreground;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -478,7 +490,7 @@ class _AlertCoverageNotice extends StatelessWidget {
         const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: Text(
-            'Alerts cover India only, sourced from IMD/SACHET.',
+            s.alertsNotice,
             style: AppTypography.caption(foreground),
           ),
         ),
@@ -487,7 +499,7 @@ class _AlertCoverageNotice extends StatelessWidget {
   }
 }
 
-class _ErrorView extends StatelessWidget {
+class _ErrorView extends ConsumerWidget {
   const _ErrorView({
     required this.message,
     required this.foreground,
@@ -499,7 +511,8 @@ class _ErrorView extends StatelessWidget {
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     // Scrollable so a long message on a short screen degrades into
     // scrolling rather than a layout overflow — and so the enclosing
     // RefreshIndicator has a scrollable to hang its pull gesture on.
@@ -517,7 +530,7 @@ class _ErrorView extends StatelessWidget {
             Icon(Icons.cloud_off, size: 40, color: foreground),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              "Couldn't load the weather",
+              s.couldNotLoadWeather,
               style: AppTypography.title(foreground),
               textAlign: TextAlign.center,
             ),
@@ -538,7 +551,7 @@ class _ErrorView extends StatelessWidget {
                   vertical: AppSpacing.md,
                 ),
               ),
-              child: Text('Try again', style: AppTypography.body(foreground)),
+              child: Text(s.tryAgain, style: AppTypography.body(foreground)),
             ),
           ],
         ),

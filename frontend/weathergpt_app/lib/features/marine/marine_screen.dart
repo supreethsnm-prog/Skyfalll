@@ -10,6 +10,7 @@ import '../../core/theme/app_typography.dart';
 import '../../data/marine_api.dart';
 import '../../shared/error_message.dart';
 import '../../shared/widgets/round_icon_button.dart';
+import '../../l10n/app_strings.dart';
 import '../shell/app_drawer.dart';
 import 'marine_controller.dart';
 
@@ -73,6 +74,7 @@ class _MarineScreenState extends ConsumerState<MarineScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(marineControllerProvider);
+    final s = ref.watch(uiStringsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bgBase,
@@ -88,13 +90,13 @@ class _MarineScreenState extends ConsumerState<MarineScreen> {
                   Builder(
                     builder: (context) => RoundIconButton(
                       icon: Icons.menu,
-                      tooltip: 'Open menu',
+                      tooltip: s.openMenu,
                       onPressed: () => Scaffold.of(context).openDrawer(),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Text(
-                    'Fishing zones',
+                    s.fishingZones,
                     style: AppTypography.title(AppColors.textPrimary),
                   ),
                 ],
@@ -164,7 +166,7 @@ class _MapViewState extends ConsumerState<_MapView> {
   void _onHit() {
     final hit = _hitNotifier.value;
     if (hit == null || hit.hitValues.isEmpty) return;
-    showZoneDetails(context, hit.hitValues.first);
+    showZoneDetails(context, hit.hitValues.first, ref.read(uiStringsProvider));
   }
 
   /// True once any OSM tile has failed to load — e.g. the tile host is
@@ -323,11 +325,12 @@ class _SummaryBar extends StatelessWidget {
 /// factual rather than alarming: the zone geometry drawn on top does not
 /// depend on the basemap and remains correct, so this must not read as a
 /// total failure of the screen.
-class _TileFailureNotice extends StatelessWidget {
+class _TileFailureNotice extends ConsumerWidget {
   const _TileFailureNotice();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
@@ -348,7 +351,7 @@ class _TileFailureNotice extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Flexible(
             child: Text(
-              'Basemap unavailable — zones are still accurate.',
+              s.basemapUnavailable,
               style: AppTypography.caption(AppColors.textSecondary),
             ),
           ),
@@ -402,14 +405,15 @@ class _EmptyOverlay extends StatelessWidget {
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
+class _ErrorView extends ConsumerWidget {
+  const _ErrorView({super.key, required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Container(
@@ -428,7 +432,7 @@ class _ErrorView extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              "Couldn't load fishing zone advisories",
+              s.couldNotLoadFishingZones,
               style: AppTypography.title(AppColors.textPrimary),
               textAlign: TextAlign.center,
             ),
@@ -450,7 +454,7 @@ class _ErrorView extends StatelessWidget {
                 ),
               ),
               child: Text(
-                'Try again',
+                s.tryAgain,
                 style: AppTypography.body(AppColors.textPrimary),
               ),
             ),
@@ -463,7 +467,11 @@ class _ErrorView extends StatelessWidget {
 
 /// Opens a zone's details as a modal bottom sheet. Mirrors
 /// `showAirportPicker`'s shape in `aviation_screen.dart`.
-Future<void> showZoneDetails(BuildContext context, PfzZone zone) {
+Future<void> showZoneDetails(
+  BuildContext context,
+  PfzZone zone, [
+  AppStrings? strings,
+]) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AppColors.bgBase,
@@ -471,17 +479,19 @@ Future<void> showZoneDetails(BuildContext context, PfzZone zone) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.panel)),
     ),
-    builder: (_) => _ZoneDetailsSheet(zone: zone),
+    builder: (_) => _ZoneDetailsSheet(zone: zone, strings: strings),
   );
 }
 
 class _ZoneDetailsSheet extends StatelessWidget {
-  const _ZoneDetailsSheet({required this.zone});
+  const _ZoneDetailsSheet({required this.zone, this.strings});
 
   final PfzZone zone;
+  final AppStrings? strings;
 
   @override
   Widget build(BuildContext context) {
+    final s = strings ?? AppStrings('en');
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -505,7 +515,7 @@ class _ZoneDetailsSheet extends StatelessWidget {
             _DetailRow(label: 'Issued', value: formatIssueDate(zone.issueDate)),
             _DetailRow(label: 'Length', value: '${zone.lengthKm.round()} km'),
             _DetailRow(
-              label: 'Sector boundary',
+              label: s.sectorBoundary,
               value: '${zone.sectorBoundary}',
             ),
           ],

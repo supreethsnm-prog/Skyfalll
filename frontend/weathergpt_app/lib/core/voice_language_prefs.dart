@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Hindi — the largest single-language audience among the 22 scheduled
 /// languages BHASHINI serves, and a reasonable default until the user
 /// picks their own via the language sheet.
-const defaultVoiceLanguageCode = 'hi';
+const defaultVoiceLanguageCode = 'en';
 
 /// Persists the user's chosen voice language across app restarts.
 ///
@@ -21,14 +21,20 @@ class PrefsVoiceLanguagePrefs implements VoiceLanguagePrefs {
 
   @override
   Future<String> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_key) ?? defaultVoiceLanguageCode;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_key) ?? defaultVoiceLanguageCode;
+    } catch (_) {
+      return defaultVoiceLanguageCode;
+    }
   }
 
   @override
   Future<void> save(String languageCode) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, languageCode);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_key, languageCode);
+    } catch (_) {}
   }
 }
 
@@ -84,31 +90,43 @@ class PrefsLanguageSettingsPrefs implements LanguageSettingsPrefs {
 
   @override
   Future<bool> loadAutoDetect() async {
-    final prefs = await SharedPreferences.getInstance();
-    // ON by default: the mic should just work across all 23 languages.
-    return prefs.getBool(_autoKey) ?? true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // ON by default: the mic should just work across all 23 languages.
+      return prefs.getBool(_autoKey) ?? true;
+    } catch (_) {
+      return true;
+    }
   }
 
   @override
   Future<void> saveAutoDetect(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_autoKey, value);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_autoKey, value);
+    } catch (_) {}
   }
 
   @override
   Future<ReadAloudMode> loadReadAloudMode() async {
-    final prefs = await SharedPreferences.getInstance();
-    // Message language by default: an English reply must read in English
-    // even when the global voice language is Marathi.
-    return prefs.getString(_readAloudKey) == 'global'
-        ? ReadAloudMode.global
-        : ReadAloudMode.message;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Message language by default: an English reply must read in English
+      // even when the global voice language is Marathi.
+      return prefs.getString(_readAloudKey) == 'global'
+          ? ReadAloudMode.global
+          : ReadAloudMode.message;
+    } catch (_) {
+      return ReadAloudMode.message;
+    }
   }
 
   @override
   Future<void> saveReadAloudMode(ReadAloudMode mode) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_readAloudKey, mode.name);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_readAloudKey, mode.name);
+    } catch (_) {}
   }
 }
 

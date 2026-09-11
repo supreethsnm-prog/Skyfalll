@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/network/app_error.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/network/app_error.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/voice_language_prefs.dart';
 import '../../data/voice_api.dart';
 import '../../features/chat/chat_controller.dart';
+import '../../l10n/app_strings.dart';
 import '../../shared/error_message.dart';
 import 'round_icon_button.dart';
 
@@ -18,14 +19,15 @@ import 'round_icon_button.dart';
 /// (menu/search/new-chat/overflow) — no new visual language. Opens
 /// [LanguageSettingsSheet]: global voice language (23), mic auto-detect,
 /// and read-aloud mode.
-class LanguageSettingsButton extends StatelessWidget {
+class LanguageSettingsButton extends ConsumerWidget {
   const LanguageSettingsButton({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return RoundIconButton(
       icon: Icons.translate,
-      tooltip: 'Language settings',
+      tooltip: s.languageSettings,
       onPressed: () => showLanguageSettings(context),
     );
   }
@@ -54,6 +56,7 @@ class LanguageSettingsSheet extends ConsumerWidget {
     final global = ref.watch(voiceLanguageProvider);
     final autoDetect = ref.watch(voiceAutoDetectProvider);
     final readAloud = ref.watch(readAloudModeProvider);
+    final s = ref.watch(uiStringsProvider);
 
     return SafeArea(
       child: Padding(
@@ -73,47 +76,47 @@ class LanguageSettingsSheet extends ConsumerWidget {
                 ),
               ),
             ),
-            Text('Language settings',
+            Text(s.languageSettings,
                 style: AppTypography.title(AppColors.textPrimary)),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Voice input, auto-detect and read-aloud.',
+              s.voiceInputDesc,
               style: AppTypography.label(AppColors.textSecondary),
             ),
             const SizedBox(height: AppSpacing.lg),
-            const _SectionLabel('Mic: how speech is recognized'),
+            _SectionLabel(s.micRecognitionTitle),
             _RadioRow(
-              label: 'Auto-detect (all 23 languages)',
-              subtitle: 'Listens first, retries once if it guessed wrong',
+              label: s.autoDetectLabel,
+              subtitle: s.autoDetectSubtitle,
               selected: autoDetect,
               onTap: () => ref
                   .read(voiceAutoDetectProvider.notifier)
                   .setAutoDetect(true),
             ),
             _RadioRow(
-              label: 'Fixed: current global language',
-              subtitle: 'Always uses the global voice language below',
+              label: s.fixedLanguageLabel,
+              subtitle: s.fixedLanguageSubtitle,
               selected: !autoDetect,
               onTap: () => ref
                   .read(voiceAutoDetectProvider.notifier)
                   .setAutoDetect(false),
             ),
             const SizedBox(height: AppSpacing.lg),
-            const _SectionLabel('Global voice language'),
+            _SectionLabel(s.globalVoiceLanguage),
             _GlobalLanguageRow(current: global),
             const SizedBox(height: AppSpacing.lg),
-            const _SectionLabel('Speaker button reads replies in'),
+            _SectionLabel(s.speakerReadMode),
             _RadioRow(
-              label: 'Message language',
-              subtitle: 'English reply reads in English, Hindi in Hindi',
+              label: s.messageLanguage,
+              subtitle: s.messageLanguageDesc,
               selected: readAloud == ReadAloudMode.message,
               onTap: () => ref
                   .read(readAloudModeProvider.notifier)
                   .setMode(ReadAloudMode.message),
             ),
             _RadioRow(
-              label: 'Global language',
-              subtitle: 'Every reply reads in the global voice language',
+              label: s.globalLanguage,
+              subtitle: s.globalLanguageDesc,
               selected: readAloud == ReadAloudMode.global,
               onTap: () => ref
                   .read(readAloudModeProvider.notifier)
@@ -245,6 +248,7 @@ class _GlobalLanguageRowState extends ConsumerState<_GlobalLanguageRow> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(uiStringsProvider);
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
@@ -263,7 +267,7 @@ class _GlobalLanguageRowState extends ConsumerState<_GlobalLanguageRow> {
           TextButton(
             onPressed: _load,
             style: TextButton.styleFrom(foregroundColor: AppColors.accent),
-            child: Text('Try again',
+            child: Text(s.tryAgain,
                 style: AppTypography.label(AppColors.accent)),
           ),
         ],
@@ -308,7 +312,7 @@ class _GlobalLanguageRowState extends ConsumerState<_GlobalLanguageRow> {
                         style:
                             AppTypography.body(AppColors.textPrimary)),
                   ),
-                  Text('Change',
+                  Text(s.change,
                       style: AppTypography.label(AppColors.accent)),
                 ],
               ),
@@ -365,6 +369,7 @@ class _GlobalLanguagePickerState
   @override
   Widget build(BuildContext context) {
     final current = ref.watch(voiceLanguageProvider);
+    final s = ref.watch(uiStringsProvider);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -372,7 +377,7 @@ class _GlobalLanguagePickerState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Global voice language',
+            Text(s.globalVoiceLanguage,
                 style: AppTypography.title(AppColors.textPrimary)),
             const SizedBox(height: AppSpacing.lg),
             if (_loading)
@@ -389,7 +394,7 @@ class _GlobalLanguagePickerState
                 onPressed: _load,
                 style:
                     TextButton.styleFrom(foregroundColor: AppColors.accent),
-                child: Text('Try again',
+                child: Text(s.tryAgain,
                     style: AppTypography.label(AppColors.accent)),
               )
             else
