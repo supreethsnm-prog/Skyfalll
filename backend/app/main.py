@@ -357,9 +357,20 @@ def historical_archive_endpoint(
                 previous_year_date = requested_date.replace(
                     year=requested_date.year - 1, day=28
                 )
-            previous_year_reading = provider.fetch_day(
-                lat, lon, previous_year_date.isoformat()
-            )
+            if previous_year_date.year >= 1940:
+                try:
+                    previous_year_reading = provider.fetch_day(
+                        lat, lon, previous_year_date.isoformat()
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Previous year archive fetch failed for %s: %s",
+                        previous_year_date,
+                        exc,
+                    )
+                    previous_year_reading = None
+            else:
+                previous_year_reading = None
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=502, detail=f"Open-Meteo archive request failed: {exc}"

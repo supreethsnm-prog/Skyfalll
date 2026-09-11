@@ -102,6 +102,9 @@ class OpenMeteoArchiveProvider:
         (see the class docstring) and must stay usable across both calls.
         Call `close()` (or use this as a context manager) when done.
         """
+        if date_str < "1940-01-01":
+            return None
+
         response = self._client.get(
             self._base_url,
             params={
@@ -113,6 +116,13 @@ class OpenMeteoArchiveProvider:
                 "timezone": "auto",
             },
         )
+        if response.status_code == 400:
+            try:
+                err = response.json()
+                if err.get("error") and "out of allowed range" in str(err.get("reason", "")).lower():
+                    return None
+            except Exception:
+                pass
         response.raise_for_status()
         payload = response.json()
         try:
