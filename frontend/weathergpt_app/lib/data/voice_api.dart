@@ -83,7 +83,7 @@ class SynthesizedSpeech {
 /// three external calls on the backend (BHASHINI discovery+compute twice,
 /// plus the LLM) — much slower than a text `/chat` turn, so both calls
 /// here use a longer receive timeout than `buildApiClient`'s 15s default.
-const _voiceReceiveTimeout = Duration(seconds: 45);
+const _voiceReceiveTimeout = Duration(seconds: 60);
 
 /// Wraps `GET /voice/languages`, `POST /voice/chat`, and
 /// `GET /voice/synthesize`.

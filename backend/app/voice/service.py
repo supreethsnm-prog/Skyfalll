@@ -7,12 +7,15 @@ every guarantee chat_turn already has (grounding via tools, retry-backed
 LLM calls, the multi-round tool-iteration cap) applies to voice for free.
 """
 
+import logging
 from collections.abc import Callable
 
 from app.chat.service import chat_turn
 from app.providers.bhashini import BhashiniSpeechProvider
 from app.providers.speech import SpeechToTextProvider, TextToSpeechProvider
 from app.voice.detect import detect_reply_language, judge_with_llm, pick_retry_language
+
+logger = logging.getLogger(__name__)
 
 
 def synthesize_speech(
@@ -87,6 +90,20 @@ def voice_chat(
                 )
                 transcription = re_transcription
                 effective_language = retry_lang
+        if not transcription.text.strip():
+            logger.info("Empty transcription from STT provider")
+            fallback_reply = (
+                "I couldn't hear or recognize any speech. Please try speaking again."
+            )
+            return {
+                "transcript": "",
+                "detected_language": effective_language,
+                "reply_language": effective_language,
+                "reply_text": fallback_reply,
+                "reply_audio_base64": "",
+                "history": history or [],
+            }
+
         try:
             chat_result = chat_fn(
                 transcription.text, history, user_location=user_location
@@ -103,8 +120,12 @@ def voice_chat(
             else effective_language
         )
         if reply_text:
-            synthesis = tts.synthesize(text=reply_text, language=reply_language)
-            reply_audio_base64 = synthesis.audio_base64
+            try:
+                synthesis = tts.synthesize(text=reply_text, language=reply_language)
+                reply_audio_base64 = synthesis.audio_base64
+            except Exception as exc:
+                logger.warning("TTS synthesis failed for voice reply: %s", exc)
+                reply_audio_base64 = ""
 
         return {
             "transcript": transcription.text,

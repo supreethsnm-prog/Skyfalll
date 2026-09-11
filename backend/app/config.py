@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-5"
     anthropic_max_tokens: int = 1024
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-3.5-flash"
+    gemini_model: str = "gemini-flash-latest"
     gemini_max_tokens: int = 1024
     llm_provider: str = "auto"
     enable_scheduler: bool = False

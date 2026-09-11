@@ -144,15 +144,17 @@ class ChatController extends Notifier<ChatUiState> {
     state = ChatSending(optimisticMessages);
 
     final homeState = ref.read(homeControllerProvider);
-    final location = homeState is HomeLoaded ? homeState.location : null;
+    final location = homeState is HomeLoaded
+        ? homeState.location
+        : ref.read(homeControllerProvider.notifier).currentLocation;
 
     try {
       final result = await api.sendMessage(
         text,
         historyForThisRequest,
-        latitude: location?.latitude,
-        longitude: location?.longitude,
-        placeName: location?.displayName,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        placeName: location.displayName,
       );
       _rawHistory = result.history;
       final displayed = result.history
@@ -198,7 +200,9 @@ class ChatController extends Notifier<ChatUiState> {
     state = ChatSending(previousMessages);
 
     final homeState = ref.read(homeControllerProvider);
-    final location = homeState is HomeLoaded ? homeState.location : null;
+    final location = homeState is HomeLoaded
+        ? homeState.location
+        : ref.read(homeControllerProvider.notifier).currentLocation;
 
     try {
       final result = await api.sendVoiceMessage(
@@ -206,9 +210,9 @@ class ChatController extends Notifier<ChatUiState> {
         language: language,
         history: historyForThisRequest,
         autoDetect: autoDetect,
-        latitude: location?.latitude,
-        longitude: location?.longitude,
-        placeName: location?.displayName,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        placeName: location.displayName,
       );
       _rawHistory = result.history;
       // Stamp the two turns this voice round trip appended with the

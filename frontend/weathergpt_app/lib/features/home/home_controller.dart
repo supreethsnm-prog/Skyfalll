@@ -104,6 +104,9 @@ final homeControllerProvider =
 class HomeController extends Notifier<HomeUiState> {
   GeocodeResult _location = _defaultLocation;
 
+  /// Current or fallback location.
+  GeocodeResult get currentLocation => _location;
+
   @override
   HomeUiState build() => const HomeLoading();
 

@@ -475,5 +475,16 @@ void main() {
       expect(fakeVoiceApi.lastLongitude, 77.5946);
       expect(fakeVoiceApi.lastPlaceName, 'Bengaluru, Karnataka');
     });
+
+    test('forwards fallback currentLocation when Home is still loading', () async {
+      fakeApi.nextResult = const ChatResult(reply: 'Cloudy', history: []);
+      await container
+          .read(chatControllerProvider.notifier)
+          .sendMessage('Will it rain?');
+
+      expect(fakeApi.lastLatitude, isNotNull);
+      expect(fakeApi.lastLongitude, isNotNull);
+      expect(fakeApi.lastPlaceName, isNotNull);
+    });
   });
 }

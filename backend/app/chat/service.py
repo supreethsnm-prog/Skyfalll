@@ -105,12 +105,17 @@ def chat_turn(
     # replays are unaffected.
     system = _SYSTEM_PROMPT
     if user_location is not None:
+        place = user_location.get("place_name")
+        lat = user_location.get("latitude")
+        lon = user_location.get("longitude")
         system += (
-            f"\n\nUser's current location: {user_location.get('place_name')} "
-            f"({user_location.get('latitude')}, {user_location.get('longitude')}). "
-            "If the message names a different place, geocode that place and use "
-            "it instead; otherwise use these coordinates directly with the "
-            "weather/forecast/alert/advisory tools (no geocode call needed)."
+            f"\n\nUser's current location is: {place} ({lat}, {lon}). "
+            "You ARE aware of the user's current location. If the user asks 'Where am I?', "
+            "'What is my current location?', 'Do you know my location?', or similar questions about "
+            f"their current position, state clearly that their current location is {place}. "
+            "If the user asks about weather 'here' or without naming a place, use these coordinates "
+            f"({lat}, {lon}) directly with the weather/forecast/alert/advisory tools (no geocode call needed). "
+            "If the message explicitly names a different place, geocode that place and use it instead."
         )
     try:
         conversation = list(history or [])

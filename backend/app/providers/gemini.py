@@ -23,6 +23,7 @@ see app/chat/service.py's module docstring.
 
 import itertools
 import json
+import logging
 
 import httpx
 
@@ -30,7 +31,17 @@ from app.config import get_settings
 from app.providers.llm import LLMTurn, ToolCall, ToolSpec
 from app.providers.retry import call_with_retries
 
+logger = logging.getLogger(__name__)
+
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+
+FALLBACK_MODELS = (
+    "gemini-flash-latest",
+    "gemini-3.5-flash-lite",
+    "gemini-3.6-flash",
+    "gemini-3.8-flash",
+    "gemini-flash-lite-latest",
+)
 
 
 def _as_response_object(content: str) -> dict:
@@ -134,8 +145,8 @@ class GeminiLLMProvider:
                 "environment variable to enable chat."
             )
         effective_model = model or settings.gemini_model
-        if model is None and effective_model in ("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"):
-            effective_model = "gemini-3.5-flash"
+        if model is None and effective_model in ("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.5-flash"):
+            effective_model = "gemini-flash-latest"
         self._model = effective_model
         self._max_tokens = settings.gemini_max_tokens
         self._base_url = base_url
@@ -151,19 +162,60 @@ class GeminiLLMProvider:
         if tools:
             body["tools"] = _translate_tools(tools)
 
-        response = call_with_retries(
-            lambda: self._client.post(
-                f"{self._base_url}/models/{self._model}:generateContent",
-                headers={
-                    # Header auth, never a ?key= query param: secrets must not
-                    # appear in URLs, where they leak into logs and proxies.
-                    "x-goog-api-key": self._api_key,
-                    "content-type": "application/json",
-                },
-                json=body,
-            )
-        )
-        payload = response.json()
+        models_to_try = [self._model]
+        for m in FALLBACK_MODELS:
+            if m not in models_to_try:
+                models_to_try.append(m)
+
+        last_exc: Exception | None = None
+        payload: dict | None = None
+
+        for idx, current_model in enumerate(models_to_try):
+            try:
+                response = call_with_retries(
+                    lambda: self._client.post(
+                        f"{self._base_url}/models/{current_model}:generateContent",
+                        headers={
+                            # Header auth, never a ?key= query param: secrets must not
+                            # appear in URLs, where they leak into logs and proxies.
+                            "x-goog-api-key": self._api_key,
+                            "content-type": "application/json",
+                        },
+                        json=body,
+                    )
+                )
+                payload = response.json()
+                if idx > 0:
+                    logger.info("Switched Gemini model to fallback '%s'", current_model)
+                    self._model = current_model
+                break
+            except httpx.HTTPStatusError as exc:
+                last_exc = exc
+                if exc.response.status_code in (404, 429, 503) and idx < len(models_to_try) - 1:
+                    logger.warning(
+                        "Gemini model '%s' failed with HTTP %s; falling back to '%s'",
+                        current_model,
+                        exc.response.status_code,
+                        models_to_try[idx + 1],
+                    )
+                    continue
+                raise
+            except httpx.TransportError as exc:
+                last_exc = exc
+                if idx < len(models_to_try) - 1:
+                    logger.warning(
+                        "Gemini model '%s' transport error: %s; falling back to '%s'",
+                        current_model,
+                        exc,
+                        models_to_try[idx + 1],
+                    )
+                    continue
+                raise
+
+        if payload is None:
+            if last_exc is not None:
+                raise last_exc
+            raise RuntimeError("Failed to generate content with Gemini")
 
         candidates = payload.get("candidates") or []
         if not candidates:
