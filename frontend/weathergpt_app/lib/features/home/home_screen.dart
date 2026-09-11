@@ -16,6 +16,7 @@ import '../../data/weather_api.dart';
 import '../../shared/error_message.dart';
 import '../shell/app_drawer.dart';
 import '../../shared/widgets/app_menu.dart';
+import '../../shared/widgets/language_settings_button.dart';
 import '../../shared/widgets/round_icon_button.dart';
 import 'home_controller.dart';
 import 'widgets/alert_banner.dart';
@@ -203,6 +204,8 @@ class _Chrome extends ConsumerWidget {
                 tooltip: 'New chat',
                 onPressed: () => context.go('/chat'),
               ),
+              const SizedBox(width: AppSpacing.sm),
+              const LanguageSettingsButton(),
               const SizedBox(width: AppSpacing.sm),
               Builder(
                 builder: (context) => RoundIconButton(

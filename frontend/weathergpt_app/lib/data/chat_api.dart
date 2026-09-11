@@ -11,7 +11,15 @@ class ChatTurn {
   final String role; // always 'user' or 'assistant'
   final String content;
 
-  const ChatTurn({required this.role, required this.content});
+  /// Bhashini voice code this turn was spoken/heard in, when known. Null
+  /// for typed turns and for conversations saved before per-message
+  /// language existed (old chats fall back to global + script guess).
+  final String? lang;
+
+  const ChatTurn({required this.role, required this.content, this.lang});
+
+  ChatTurn copyWith({String? lang}) =>
+      ChatTurn(role: role, content: content, lang: lang ?? this.lang);
 
   /// Returns null (rather than throwing) for any entry this app cannot
   /// safely display. The backend (see backend/app/chat/service.py) emits
@@ -36,7 +44,12 @@ class ChatTurn {
     if (content is! String) return null;
     if (raw.containsKey('tool_calls')) return null;
     if (content.trim().isEmpty) return null;
-    return ChatTurn(role: role as String, content: content);
+    final lang = raw['lang'];
+    return ChatTurn(
+      role: role as String,
+      content: content,
+      lang: lang is String && lang.isNotEmpty ? lang : null,
+    );
   }
 }
 
@@ -71,11 +84,23 @@ class ChatApi {
   /// by this same method (or null for the first turn in a conversation)
   /// — never a client-reconstructed or filtered list. The backend uses
   /// it verbatim to resume multi-turn tool-calling context.
-  Future<ChatResult> sendMessage(String message, List<dynamic>? history) {
+  Future<ChatResult> sendMessage(
+    String message,
+    List<dynamic>? history, {
+    double? latitude,
+    double? longitude,
+    String? placeName,
+  }) {
     return guardApi(() async {
       final response = await _dio.post<Map<String, dynamic>>(
         '/chat',
-        data: {'message': message, 'history': history},
+        data: {
+          'message': message,
+          'history': history,
+          if (latitude != null) 'latitude': latitude,
+          if (longitude != null) 'longitude': longitude,
+          if (placeName != null && placeName.isNotEmpty) 'place_name': placeName,
+        },
       );
       return parseChatResult(response.data!);
     });

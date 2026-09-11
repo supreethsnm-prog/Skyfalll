@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/clipboard/clipboard_service.dart';
+import '../../core/lang_guess.dart';
 import '../../core/network/app_error.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -8,6 +10,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/voice_language_prefs.dart';
 import '../../shared/error_message.dart';
 import '../../shared/widgets/app_menu.dart';
+import '../../shared/widgets/language_settings_button.dart';
 import '../../shared/widgets/round_icon_button.dart';
 import '../shell/app_drawer.dart';
 import 'audio_playback_controller.dart';
@@ -59,12 +62,20 @@ class ChatScreen extends ConsumerWidget {
               // flight or has failed, typing a new message would silently
               // discard the one already in play.
               enabled: state is ChatIdle,
+              sending: state is ChatSending,
               onSend: controller.sendMessage,
-              onSendVoice: (audioPath) {
+              onSendVoice: (audioPath) async {
+                // Await persisted settings first: on a fresh launch the
+                // providers still hold defaults until SharedPreferences
+                // answers (see VoiceLanguageController.restored).
+                await ref.read(voiceLanguageProvider.notifier).restored;
+                await ref.read(voiceAutoDetectProvider.notifier).restored;
                 final language = ref.read(voiceLanguageProvider);
-                controller.sendVoice(
+                final autoDetect = ref.read(voiceAutoDetectProvider);
+                await controller.sendVoice(
                   audioPath,
                   language,
+                  autoDetect: autoDetect,
                   onReplyAudio: (audioBase64) => ref
                       .read(audioPlaybackControllerProvider.notifier)
                       .playBase64Wav(audioBase64, turnKey: _voiceReplyPlaybackKey),
@@ -100,37 +111,43 @@ class _ChatChrome extends StatelessWidget {
               onPressed: () => Scaffold.of(context).openDrawer(),
             ),
           ),
-          Builder(
-            builder: (context) => RoundIconButton(
-              icon: Icons.more_vert,
-              tooltip: 'More options',
-              onPressed: () => showAppMenu(
-                context: context,
-                header: 'This conversation',
-                items: [
-                  AppMenuItem(
-                      icon: Icons.ios_share, label: 'Share', onTap: () {}),
-                  AppMenuItem(
-                      icon: Icons.push_pin_outlined,
-                      label: 'Pin',
-                      onTap: () {}),
-                  AppMenuItem(
-                      icon: Icons.search,
-                      label: 'Find in chat',
-                      onTap: () {}),
-                  AppMenuItem(
-                      icon: Icons.archive_outlined,
-                      label: 'Archive',
-                      onTap: () {}),
-                  AppMenuItem(
-                    icon: Icons.delete_outline,
-                    label: 'Delete',
-                    onTap: () {},
-                    destructive: true,
+          Row(
+            children: [
+              const LanguageSettingsButton(),
+              const SizedBox(width: AppSpacing.sm),
+              Builder(
+                builder: (context) => RoundIconButton(
+                  icon: Icons.more_vert,
+                  tooltip: 'More options',
+                  onPressed: () => showAppMenu(
+                    context: context,
+                    header: 'This conversation',
+                    items: [
+                      AppMenuItem(
+                          icon: Icons.ios_share, label: 'Share', onTap: () {}),
+                      AppMenuItem(
+                          icon: Icons.push_pin_outlined,
+                          label: 'Pin',
+                          onTap: () {}),
+                      AppMenuItem(
+                          icon: Icons.search,
+                          label: 'Find in chat',
+                          onTap: () {}),
+                      AppMenuItem(
+                          icon: Icons.archive_outlined,
+                          label: 'Archive',
+                          onTap: () {}),
+                      AppMenuItem(
+                        icon: Icons.delete_outline,
+                        label: 'Delete',
+                        onTap: () {},
+                        destructive: true,
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
@@ -176,13 +193,25 @@ class _Transcript extends ConsumerWidget {
       itemBuilder: (context, index) {
         final turn = messages[index];
         if (turn.role == 'user') {
-          return UserBubble(text: turn.content);
+          // Long-press copies — the standard mobile-chat convention, and
+          // it keeps the bubble itself visually identical to the spec
+          // (no extra chrome on the user's own turns).
+          return GestureDetector(
+            onLongPress: () => copyChatText(context, ref, turn.content),
+            child: UserBubble(text: turn.content),
+          );
         }
         // The turn's position in THIS list, not a stable message id — the
         // list is rebuilt from `result.history` on every turn, so an
         // index is stable for exactly as long as a given render, which is
         // all a "currently reading this one aloud" indicator needs.
-        return _ReadAloudAssistantMessage(text: turn.content, playbackKey: index);
+        // Stored per-message language travels with the turn (null for
+        // typed turns and pre-language-memory chats).
+        return _ReadAloudAssistantMessage(
+          text: turn.content,
+          messageLang: turn.lang,
+          playbackKey: index,
+        );
       },
     );
   }
@@ -193,9 +222,14 @@ class _Transcript extends ConsumerWidget {
 /// tapping again on a message already loading/playing stops it — a
 /// second tap must not fire a second synthesis request.
 class _ReadAloudAssistantMessage extends ConsumerWidget {
-  const _ReadAloudAssistantMessage({required this.text, required this.playbackKey});
+  const _ReadAloudAssistantMessage(
+      {required this.text, required this.messageLang, required this.playbackKey});
 
   final String text;
+
+  /// Stored language of this reply (null for old chats). Message mode
+  /// prefers it, then an unambiguous script guess, then global.
+  final String? messageLang;
   final int playbackKey;
 
   @override
@@ -206,7 +240,7 @@ class _ReadAloudAssistantMessage extends ConsumerWidget {
 
     return AssistantMessage(
       text: text,
-      onCopy: () {},
+      onCopy: () => copyChatText(context, ref, text),
       onReadAloud: () => _toggle(context, ref, playback, isThisOne),
       onShare: () {},
       onMore: () {},
@@ -226,7 +260,15 @@ class _ReadAloudAssistantMessage extends ConsumerWidget {
       return;
     }
     try {
-      final language = ref.read(voiceLanguageProvider);
+      await ref.read(readAloudModeProvider.notifier).restored;
+      await ref.read(voiceLanguageProvider.notifier).restored;
+      final mode = ref.read(readAloudModeProvider);
+      final global = ref.read(voiceLanguageProvider);
+      final language = mode == ReadAloudMode.global
+          ? global
+          : (messageLang ??
+              guessLanguageFromScript(text) ??
+              global);
       final speech =
           await ref.read(voiceApiProvider).synthesize(text: text, language: language);
       await controller.playBase64Wav(speech.audioBase64, turnKey: playbackKey);
@@ -236,6 +278,18 @@ class _ReadAloudAssistantMessage extends ConsumerWidget {
           .showSnackBar(SnackBar(content: Text(errorMessageFor(e))));
     }
   }
+}
+
+/// Copies chat text and confirms with a transient notice. Shared by the
+/// assistant copy icon and the user-bubble long-press so both confirm
+/// identically.
+Future<void> copyChatText(
+    BuildContext context, WidgetRef ref, String text) async {
+  await ref.read(clipboardServiceProvider).copy(text);
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Copied to clipboard')),
+  );
 }
 
 class _FailureNotice extends StatelessWidget {

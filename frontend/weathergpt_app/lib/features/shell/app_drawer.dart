@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_radius.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../shared/widgets/app_menu.dart';
 import '../../shared/widgets/round_icon_button.dart';
 import '../chat/chat_controller.dart';
 
@@ -135,35 +136,57 @@ class AppDrawer extends ConsumerWidget {
                       context.go('/saved');
                     },
                   ),
-                  const _SectionLabel('Recents'),
+                  const                   _SectionLabel('Recents'),
                   if (titles.isEmpty)
                     const _EmptyRecents()
                   else
                     for (var i = 0; i < titles.length; i++)
-                      _NavEntry(
-                        icon: Icons.chat_bubble_outline,
-                        label: titles[i],
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          // Only a real saved conversation can be
-                          // reopened; an injected title list is display
-                          // only.
-                          if (recents == null && i < conversations.length) {
-                            ref
-                                .read(chatControllerProvider.notifier)
-                                .resume(conversations[i]);
-                          }
-                          context.go('/chat');
-                        },
+                      GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onLongPress: () => _showDeleteMenu(context, ref, i),
+                        onSecondaryTap: () => _showDeleteMenu(context, ref, i),
+                        child: _NavEntry(
+                          icon: Icons.chat_bubble_outline,
+                          label: titles[i],
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            if (recents == null && i < conversations.length) {
+                              ref
+                                  .read(chatControllerProvider.notifier)
+                                  .resume(conversations[i]);
+                            }
+                            context.go('/chat');
+                          },
+                        ),
                       ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: AppColors.divider),
-            const _AccountRow(),
           ],
         ),
       ),
+    );
+  }
+
+  /// Shows a delete menu for the conversation at index [index] in the
+  /// conversations list.
+  void _showDeleteMenu(BuildContext context, WidgetRef ref, int index) {
+    final conversations = ref.read(conversationsProvider);
+    if (index >= conversations.length) return;
+
+    showAppMenu(
+      context: context,
+      items: [
+        AppMenuItem(
+          icon: Icons.delete_outline,
+          label: 'Delete',
+          destructive: true,
+          onTap: () {
+            ref.read(chatControllerProvider.notifier).startNew();
+            ref.read(conversationsProvider.notifier).remove(conversations[index].id);
+          },
+        ),
+      ],
     );
   }
 }

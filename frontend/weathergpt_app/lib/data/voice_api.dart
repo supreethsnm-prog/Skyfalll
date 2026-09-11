@@ -23,6 +23,12 @@ class VoiceLanguage {
 /// said back, and (when synthesis succeeded) audio of the reply.
 class VoiceChatResult {
   final String transcript;
+
+  /// Bhashini code the transcript was actually produced in. Equals the
+  /// requested `language` for manual turns; the winning retry language for
+  /// auto-detect turns. Old backends omit it — then it falls back to the
+  /// requested language on the caller side, never null here.
+  final String detectedLanguage;
   final String replyText;
 
   /// Empty when the backend could not synthesize the reply — a real,
@@ -36,6 +42,7 @@ class VoiceChatResult {
 
   const VoiceChatResult({
     required this.transcript,
+    required this.detectedLanguage,
     required this.replyText,
     required this.replyAudioBase64,
     required this.history,
@@ -44,6 +51,7 @@ class VoiceChatResult {
   factory VoiceChatResult.fromJson(Map<String, dynamic> json) {
     return VoiceChatResult(
       transcript: json['transcript'] as String,
+      detectedLanguage: json['detected_language'] as String? ?? '',
       replyText: json['reply_text'] as String,
       replyAudioBase64: json['reply_audio_base64'] as String? ?? '',
       history: json['history'] as List<dynamic>,
@@ -98,6 +106,10 @@ class VoiceApi {
     required File audioFile,
     required String language,
     List<dynamic>? history,
+    bool autoDetect = false,
+    double? latitude,
+    double? longitude,
+    String? placeName,
   }) {
     return guardApi(() async {
       final formData = FormData.fromMap({
@@ -107,7 +119,11 @@ class VoiceApi {
           contentType: DioMediaType('audio', 'wav'),
         ),
         'language': language,
+        'auto_detect': autoDetect.toString(),
         if (history != null) 'history': jsonEncode(history),
+        if (latitude != null) 'latitude': latitude.toString(),
+        if (longitude != null) 'longitude': longitude.toString(),
+        if (placeName != null && placeName.isNotEmpty) 'place_name': placeName,
       });
       final response = await _dio.post<Map<String, dynamic>>(
         '/voice/chat',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:weathergpt_app/core/clipboard/clipboard_service.dart';
 import 'package:weathergpt_app/core/network/app_error.dart';
 import 'package:weathergpt_app/core/voice_language_prefs.dart';
 import 'package:weathergpt_app/data/chat_api.dart';
@@ -18,7 +19,13 @@ import '../../support/fake_apis.dart';
 
 class _RepliedChatApi implements ChatApi {
   @override
-  Future<ChatResult> sendMessage(String message, List<dynamic>? history) async {
+  Future<ChatResult> sendMessage(
+    String message,
+    List<dynamic>? history, {
+    double? latitude,
+    double? longitude,
+    String? placeName,
+  }) async {
     return ChatResult(
       reply: 'Sunny today',
       history: [
@@ -33,6 +40,7 @@ Future<void> _pumpPopulatedChat(
   WidgetTester tester, {
   required FakeVoiceApi voiceApi,
   required FakeAudioPlaybackDevice playbackDevice,
+  FakeClipboardService? clipboard,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -41,7 +49,10 @@ Future<void> _pumpPopulatedChat(
         conversationStoreProvider.overrideWithValue(FakeConversationStore()),
         voiceApiProvider.overrideWithValue(voiceApi),
         voiceLanguagePrefsProvider.overrideWithValue(FakeVoiceLanguagePrefs('hi')),
+        languageSettingsPrefsProvider.overrideWithValue(FakeLanguageSettingsPrefs()),
         audioPlaybackDeviceProvider.overrideWithValue(playbackDevice),
+        clipboardServiceProvider
+            .overrideWithValue(clipboard ?? FakeClipboardService()),
       ],
       child: const MaterialApp(home: ChatScreen()),
     ),
@@ -99,6 +110,40 @@ void main() {
     // Stopped, not synthesized a second time.
     expect(voiceApi.textsRequestedForSynthesis, hasLength(1));
     expect(playbackDevice.stopCalls, greaterThanOrEqualTo(1));
+  });
+
+  testWidgets('tapping copy copies the exact reply text and confirms',
+      (tester) async {
+    final voiceApi = FakeVoiceApi(
+      synthesizeResult: const SynthesizedSpeech(audioBase64: 'ZmFrZQ==', audioFormat: 'wav'),
+    );
+    final clipboard = FakeClipboardService();
+
+    await _pumpPopulatedChat(
+        tester, voiceApi: voiceApi, playbackDevice: FakeAudioPlaybackDevice(), clipboard: clipboard);
+
+    await tester.tap(find.byTooltip('Copy'));
+    await tester.pump();
+
+    expect(clipboard.copied, ['Sunny today']);
+    expect(find.text('Copied to clipboard'), findsOneWidget);
+  });
+
+  testWidgets('long-pressing a user bubble copies the sent message',
+      (tester) async {
+    final voiceApi = FakeVoiceApi(
+      synthesizeResult: const SynthesizedSpeech(audioBase64: 'ZmFrZQ==', audioFormat: 'wav'),
+    );
+    final clipboard = FakeClipboardService();
+
+    await _pumpPopulatedChat(
+        tester, voiceApi: voiceApi, playbackDevice: FakeAudioPlaybackDevice(), clipboard: clipboard);
+
+    await tester.longPress(find.text('Weather?'));
+    await tester.pump();
+
+    expect(clipboard.copied, ['Weather?']);
+    expect(find.text('Copied to clipboard'), findsOneWidget);
   });
 
   testWidgets('a synthesis failure surfaces a snackbar rather than crashing',

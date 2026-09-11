@@ -17,7 +17,13 @@ class _FakeChatApi implements ChatApi {
   final sentHistories = <List<dynamic>?>[];
 
   @override
-  Future<ChatResult> sendMessage(String message, List<dynamic>? history) async {
+  Future<ChatResult> sendMessage(
+    String message,
+    List<dynamic>? history, {
+    double? latitude,
+    double? longitude,
+    String? placeName,
+  }) async {
     sentHistories.add(history);
     if (fail) throw const NetworkConnectionError();
     return ChatResult(
@@ -205,5 +211,32 @@ void main() {
     await chat.sendMessage('newer');
 
     expect(container.read(conversationsProvider).first.title, 'newer');
+  });
+
+  test('remove deletes a conversation and persists', () async {
+    final store = _MemoryStore([
+      Conversation(
+        id: 'conv1',
+        messages: const [ChatTurn(role: 'user', content: 'first')],
+        updatedAt: DateTime(2026, 9, 9),
+      ),
+      Conversation(
+        id: 'conv2',
+        messages: const [ChatTurn(role: 'user', content: 'second')],
+        updatedAt: DateTime(2026, 9, 10),
+      ),
+    ]);
+    final container = _container(_FakeChatApi(), store);
+
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(conversationsProvider), hasLength(2));
+
+    await container.read(conversationsProvider.notifier).remove('conv1');
+
+    final remaining = container.read(conversationsProvider);
+    expect(remaining, hasLength(1));
+    expect(remaining.single.id, 'conv2');
+    expect(store.saveCount, 1);
   });
 }

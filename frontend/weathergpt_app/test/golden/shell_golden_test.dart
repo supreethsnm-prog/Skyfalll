@@ -59,7 +59,13 @@ class _EmptyConversationStore implements ConversationStore {
 
 class _InertChatApi implements ChatApi {
   @override
-  Future<ChatResult> sendMessage(String message, List<dynamic>? history) {
+  Future<ChatResult> sendMessage(
+    String message,
+    List<dynamic>? history, {
+    double? latitude,
+    double? longitude,
+    String? placeName,
+  }) {
     return Completer<ChatResult>().future;
   }
 
@@ -72,7 +78,13 @@ class _InertChatApi implements ChatApi {
 /// backend's own opaque shape, which the controller stores verbatim.
 class _ReplyingChatApi implements ChatApi {
   @override
-  Future<ChatResult> sendMessage(String message, List<dynamic>? history) async {
+  Future<ChatResult> sendMessage(
+    String message,
+    List<dynamic>? history, {
+    double? latitude,
+    double? longitude,
+    String? placeName,
+  }) async {
     const reply =
         'Yes — heavy rain is likely across Pune district from about 6 pm '
         'this evening, easing after midnight. Expect around 12 mm of '

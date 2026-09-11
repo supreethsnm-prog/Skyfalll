@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:latlong2/latlong.dart';
 import 'package:weathergpt_app/core/audio/audio_playback_device.dart';
 import 'package:weathergpt_app/core/audio/voice_recorder.dart';
+import 'package:weathergpt_app/core/clipboard/clipboard_service.dart';
 import 'package:weathergpt_app/core/location/device_location.dart';
 import 'package:weathergpt_app/core/network/app_error.dart';
 import 'package:weathergpt_app/core/permissions/mic_permission.dart';
@@ -389,6 +390,40 @@ class FakeVoiceLanguagePrefs implements VoiceLanguagePrefs {
   Future<void> save(String code) async => languageCode = code;
 }
 
+/// In-memory language-settings prefs (auto-detect + read-aloud mode).
+class FakeLanguageSettingsPrefs implements LanguageSettingsPrefs {
+  FakeLanguageSettingsPrefs({
+    this.autoDetect = true,
+    this.readAloudMode = ReadAloudMode.message,
+  });
+
+  bool autoDetect;
+  ReadAloudMode readAloudMode;
+
+  @override
+  Future<bool> loadAutoDetect() async => autoDetect;
+
+  @override
+  Future<void> saveAutoDetect(bool value) async => autoDetect = value;
+
+  @override
+  Future<ReadAloudMode> loadReadAloudMode() async => readAloudMode;
+
+  @override
+  Future<void> saveReadAloudMode(ReadAloudMode mode) async =>
+      readAloudMode = mode;
+}
+
+/// In-memory clipboard — no platform channel in tests.
+class FakeClipboardService implements ClipboardService {
+  final List<String> copied = [];
+
+  @override
+  Future<void> copy(String text) async {
+    copied.add(text);
+  }
+}
+
 /// A fixed permission outcome — no real microphone, no plugin.
 class FakeMicPermission implements MicPermission {
   FakeMicPermission([this.result = MicPermissionResult.granted]);
@@ -454,7 +489,9 @@ class FakeVoiceApi implements VoiceApi {
   SynthesizedSpeech? synthesizeResult;
   AppError? synthesizeError;
   final List<String> languagesRequestedForChat = [];
+  final List<bool> autoDetectFlags = [];
   final List<String> textsRequestedForSynthesis = [];
+  final List<String> synthLanguages = [];
 
   @override
   Future<List<VoiceLanguage>> fetchLanguages() async {
@@ -467,8 +504,13 @@ class FakeVoiceApi implements VoiceApi {
     required File audioFile,
     required String language,
     List<dynamic>? history,
+    bool autoDetect = false,
+    double? latitude,
+    double? longitude,
+    String? placeName,
   }) async {
     languagesRequestedForChat.add(language);
+    autoDetectFlags.add(autoDetect);
     if (chatError != null) throw chatError!;
     return chatResult!;
   }
@@ -476,6 +518,7 @@ class FakeVoiceApi implements VoiceApi {
   @override
   Future<SynthesizedSpeech> synthesize({required String text, required String language}) async {
     textsRequestedForSynthesis.add(text);
+    synthLanguages.add(language);
     if (synthesizeError != null) throw synthesizeError!;
     return synthesizeResult!;
   }

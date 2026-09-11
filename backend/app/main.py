@@ -400,6 +400,24 @@ def climate_news_endpoint() -> list[dict]:
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
     history: list[dict] | None = None
+    # Optional current-location context (mirrors the Home screen place).
+    # Lets the LLM answer "will it rain tomorrow" without a named place.
+    # Pure per-request context — never written into history.
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    place_name: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+def _user_location_of(
+    latitude: float | None, longitude: float | None, place_name: str | None
+) -> dict | None:
+    if latitude is None or longitude is None:
+        return None
+    return {
+        "latitude": latitude,
+        "longitude": longitude,
+        "place_name": place_name or f"{latitude}, {longitude}",
+    }
 
 
 # Unlike every other route in this file, chat_turn has no cache to fall back to in
@@ -429,7 +447,14 @@ def chat_endpoint(
     request: ChatRequest, llm: LLMProvider = Depends(get_llm_provider)
 ) -> dict:
     try:
-        return chat_turn(request.message, request.history, provider=llm)
+        return chat_turn(
+            request.message,
+            request.history,
+            provider=llm,
+            user_location=_user_location_of(
+                request.latitude, request.longitude, request.place_name
+            ),
+        )
     except json.JSONDecodeError as e:
         # Must be caught before (KeyError, ValueError) below — JSONDecodeError
         # is a ValueError subclass, and a malformed response FROM the LLM
@@ -578,6 +603,14 @@ def voice_chat_endpoint(
     # (json.dumps([...]) on the client) rather than as a parsed list the way
     # /chat's JSON body delivers it.
     history: str | None = Form(None),
+    # Auto-detect spoken language across the 23 voice languages (max 2 ASR
+    # calls per message: try-1 in `language`, one script+LLM-judged retry).
+    # `language` then acts as the fallback/try-1 language. Old clients omit
+    # it (default False) and keep exact legacy single-pass behavior.
+    auto_detect: bool = Form(False),
+    latitude: float | None = Form(None),
+    longitude: float | None = Form(None),
+    place_name: str | None = Form(None),
     stt: SpeechToTextProvider = Depends(get_stt_provider),
     tts: TextToSpeechProvider = Depends(get_tts_provider),
     llm: LLMProvider = Depends(get_llm_provider),
@@ -594,6 +627,7 @@ def voice_chat_endpoint(
             raise HTTPException(status_code=422, detail=f"Invalid history: {e}") from e
 
     audio_base64 = base64.b64encode(validated_audio.content).decode("ascii")
+    user_location = _user_location_of(latitude, longitude, place_name)
     try:
         return voice_chat(
             audio_base64=audio_base64,
@@ -603,12 +637,12 @@ def voice_chat_endpoint(
             sampling_rate=validated_audio.sampling_rate,
             stt_provider=stt,
             tts_provider=tts,
-            # voice_chat's default chat_fn is chat_turn with no provider, which
-            # would build its own live LLM provider — bypassing the Depends seam
-            # entirely. Binding the Depends-provided `llm` here keeps /voice/chat
-            # consistent with /chat: both route through the same overridable
-            # get_llm_provider dependency, so tests can fake the LLM for either.
-            chat_fn=lambda message, history: chat_turn(message, history, provider=llm),
+            auto_detect=auto_detect,
+            llm_for_judge=llm,
+            user_location=user_location,
+            chat_fn=lambda message, history, user_location=None: chat_turn(
+                message, history, provider=llm, user_location=user_location
+            ),
         )
     except (KeyError, IndexError) as e:
         # A malformed or truncated BHASHINI payload — e.g. the

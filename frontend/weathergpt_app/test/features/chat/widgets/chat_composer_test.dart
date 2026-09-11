@@ -19,6 +19,7 @@ Future<void> _pumpComposer(
   ValueChanged<String>? onSend,
   ValueChanged<String>? onSendVoice,
   bool enabled = true,
+  bool sending = false,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -30,6 +31,7 @@ Future<void> _pumpComposer(
         home: Scaffold(
           body: ChatComposer(
             enabled: enabled,
+            sending: sending,
             onSend: onSend ?? (_) {},
             onSendVoice: onSendVoice ?? (_) {},
           ),
@@ -151,6 +153,21 @@ void main() {
     expect(recorder.stopCalls, 1);
     expect(sentPath, '/tmp/message_42.wav');
     expect(find.byType(TextField), findsOneWidget); // back to idle input
+  });
+
+  testWidgets('while sending, a spinner replaces mic/send at the bar end',
+      (tester) async {
+    await _pumpComposer(
+      tester,
+      micPermission: FakeMicPermission(),
+      recorder: FakeVoiceRecorder(),
+      sending: true,
+    );
+
+    expect(find.bySemanticsLabel('Sending'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byIcon(Icons.mic_none), findsNothing);
+    expect(find.byIcon(Icons.arrow_upward), findsNothing);
   });
 
   testWidgets('a disabled composer ignores taps on the attach and mic buttons',

@@ -64,7 +64,12 @@ class PrefsConversationStore implements ConversationStore {
         'updated_at': c.updatedAt.toIso8601String(),
         'raw_history': c.rawHistory,
         'messages': [
-          for (final m in c.messages) {'role': m.role, 'content': m.content},
+          for (final m in c.messages)
+            {
+              'role': m.role,
+              'content': m.content,
+              if (m.lang != null) 'lang': m.lang,
+            },
         ],
       };
 
@@ -81,7 +86,12 @@ class PrefsConversationStore implements ConversationStore {
       final role = m['role'];
       final content = m['content'];
       if (role is! String || content is! String) continue;
-      turns.add(ChatTurn(role: role, content: content));
+      final lang = m['lang'];
+      turns.add(ChatTurn(
+        role: role,
+        content: content,
+        lang: lang is String && lang.isNotEmpty ? lang : null,
+      ));
     }
     // A conversation with nothing displayable is not worth restoring.
     if (turns.isEmpty) return null;

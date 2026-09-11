@@ -5,6 +5,7 @@ import '../../core/network/api_client.dart';
 import '../../core/network/app_error.dart';
 import '../../data/chat_api.dart';
 import '../../data/voice_api.dart';
+import '../home/home_controller.dart';
 import 'conversation_store.dart';
 
 sealed class ChatUiState {
@@ -142,8 +143,17 @@ class ChatController extends Notifier<ChatUiState> {
     ];
     state = ChatSending(optimisticMessages);
 
+    final homeState = ref.read(homeControllerProvider);
+    final location = homeState is HomeLoaded ? homeState.location : null;
+
     try {
-      final result = await api.sendMessage(text, historyForThisRequest);
+      final result = await api.sendMessage(
+        text,
+        historyForThisRequest,
+        latitude: location?.latitude,
+        longitude: location?.longitude,
+        placeName: location?.displayName,
+      );
       _rawHistory = result.history;
       final displayed = result.history
           .map(ChatTurn.tryFromRaw)
@@ -178,6 +188,7 @@ class ChatController extends Notifier<ChatUiState> {
   Future<void> sendVoice(
     String audioPath,
     String language, {
+    bool autoDetect = false,
     void Function(String audioBase64)? onReplyAudio,
     void Function(AppError error)? onError,
   }) async {
@@ -186,17 +197,36 @@ class ChatController extends Notifier<ChatUiState> {
     final previousMessages = state.messages;
     state = ChatSending(previousMessages);
 
+    final homeState = ref.read(homeControllerProvider);
+    final location = homeState is HomeLoaded ? homeState.location : null;
+
     try {
       final result = await api.sendVoiceMessage(
         audioFile: File(audioPath),
         language: language,
         history: historyForThisRequest,
+        autoDetect: autoDetect,
+        latitude: location?.latitude,
+        longitude: location?.longitude,
+        placeName: location?.displayName,
       );
       _rawHistory = result.history;
+      // Stamp the two turns this voice round trip appended with the
+      // effective language: old backends omit detected_language, so fall
+      // back to the requested language (never null here).
+      final heardIn = result.detectedLanguage.isNotEmpty
+          ? result.detectedLanguage
+          : language;
       final displayed = result.history
           .map(ChatTurn.tryFromRaw)
           .whereType<ChatTurn>()
           .toList();
+      if (displayed.length >= 2) {
+        displayed[displayed.length - 2] =
+            displayed[displayed.length - 2].copyWith(lang: heardIn);
+        displayed[displayed.length - 1] =
+            displayed[displayed.length - 1].copyWith(lang: heardIn);
+      }
       state = ChatIdle(displayed);
       await _persist(displayed);
       if (result.replyAudioBase64.isNotEmpty) {

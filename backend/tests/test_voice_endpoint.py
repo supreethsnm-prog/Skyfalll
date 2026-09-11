@@ -287,3 +287,26 @@ def test_voice_chat_rejects_oversized_upload():
     )
     assert response.status_code == 413
     assert "too large" in response.json()["detail"]
+
+
+def test_voice_chat_forwards_user_location():
+    fake_llm = _override_llm("It will rain.")
+    _override(fake_stt=_FakeSTT(), fake_tts=_FakeTTS())
+    try:
+        response = client.post(
+            "/voice/chat",
+            files={"audio": ("test.wav", io.BytesIO(_wav_bytes()), "audio/wav")},
+            data={
+                "language": "hi",
+                "latitude": "12.97",
+                "longitude": "77.59",
+                "place_name": "Bengaluru",
+            },
+        )
+        assert response.status_code == 200
+        assert "Bengaluru" in fake_llm.calls[0]["system"]
+        assert "12.97" in fake_llm.calls[0]["system"]
+    finally:
+        _clear_overrides()
+        _clear_llm_override()
+

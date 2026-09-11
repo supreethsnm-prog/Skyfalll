@@ -73,7 +73,17 @@ _SYSTEM_PROMPT = (
     "at all, and never guess a value from memory.\n\n"
     "Reply in the same language the user wrote in — including Hindi, Telugu, "
     "Tamil, Bengali, Marathi and other Indian languages — keeping numbers, "
-    "units and place names in standard form."
+    "units and place names in standard form.\n\n"
+    "Users often mix languages: English sentences with a transliterated "
+    "Indian word, e.g. 'Tomorrow in Hubli, how much will be the Bislut?' "
+    "where Bislut/bislu/bisilu is Kannada for sunshine/heat. Common weather "
+    "words: Kannada bisilu/bislu=sunshine/heat, male=rain, chali=cold, "
+    "gaali=wind; Hindi baarish=rain, garmi=heat, sardi=cold, hawa=wind, "
+    "mausam=weather. If one word is unfamiliar but the rest is clear, infer "
+    "it from context (place + tomorrow + how-much strongly implies the "
+    "weather parameter), state the assumption briefly ('taking Bislut to "
+    "mean sunshine'), and answer — never stonewall the whole question over "
+    "a single unknown word."
 )
 
 
@@ -81,6 +91,7 @@ def chat_turn(
     message: str,
     history: list[dict] | None = None,
     provider: LLMProvider | None = None,
+    user_location: dict | None = None,
 ) -> dict:
     # chat_turn owns the lifecycle of a provider it constructs itself (no
     # provider argument given), and closes it once the loop is done. An
@@ -89,6 +100,18 @@ def chat_turn(
     # closed here — its lifecycle belongs to whoever constructed it.
     owns_llm = provider is None
     llm = provider or build_llm_provider()
+    # Current-location context is per-request system guidance, never history:
+    # history stays exactly what the client sent so saved conversations and
+    # replays are unaffected.
+    system = _SYSTEM_PROMPT
+    if user_location is not None:
+        system += (
+            f"\n\nUser's current location: {user_location.get('place_name')} "
+            f"({user_location.get('latitude')}, {user_location.get('longitude')}). "
+            "If the message names a different place, geocode that place and use "
+            "it instead; otherwise use these coordinates directly with the "
+            "weather/forecast/alert/advisory tools (no geocode call needed)."
+        )
     try:
         conversation = list(history or [])
         conversation.append({"role": "user", "content": message})
@@ -106,7 +129,7 @@ def chat_turn(
                 conversation.append({"role": "assistant", "content": fallback_reply})
                 return {"reply": fallback_reply, "history": conversation}
 
-            turn = llm.generate(system=_SYSTEM_PROMPT, history=conversation, tools=TOOL_SPECS)
+            turn = llm.generate(system=system, history=conversation, tools=TOOL_SPECS)
 
             if turn.stop_reason == "max_tokens":
                 logger.warning("LLM response truncated (stop_reason=max_tokens)")

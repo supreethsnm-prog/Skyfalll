@@ -170,6 +170,12 @@ class _ChromeSection extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.md),
             RoundIconButton(
+              icon: Icons.translate,
+              tooltip: 'Language settings',
+              onPressed: () {},
+            ),
+            const SizedBox(width: AppSpacing.md),
+            RoundIconButton(
               icon: Icons.more_vert,
               tooltip: 'More',
               onPressed: () {},

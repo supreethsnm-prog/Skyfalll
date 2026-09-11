@@ -35,6 +35,7 @@ class ChatComposer extends ConsumerStatefulWidget {
     required this.onSend,
     required this.onSendVoice,
     this.enabled = true,
+    this.sending = false,
     this.hintText = 'Ask about the weather',
   });
 
@@ -49,6 +50,11 @@ class ChatComposer extends ConsumerStatefulWidget {
   /// False while a send is in flight. A disabled composer is what stops a
   /// user typing over a failed message and silently discarding it.
   final bool enabled;
+
+  /// True while the last send (text or voice) is still awaiting a reply.
+  /// Shows a small spinner at the trailing end of the pill — the user
+  /// asked for a ChatGPT-like sending indicator after tap/stop.
+  final bool sending;
 
   final String hintText;
 
@@ -208,7 +214,9 @@ class _ChatComposerState extends ConsumerState<ChatComposer> {
                       ),
                     ),
                   ),
-                  if (_hasText)
+                  if (widget.sending)
+                    const _SendingSpinner()
+                  else if (_hasText)
                     _CircleAction(
                       icon: Icons.arrow_upward,
                       tooltip: 'Send message',
@@ -266,6 +274,40 @@ class _RecordingRow extends StatelessWidget {
           filled: true,
         ),
       ],
+    );
+  }
+}
+
+/// The trailing indicator while a send is in flight. Same 32dp footprint
+/// as [_CircleAction] so the pill never shifts height when it appears —
+/// small [CircularProgressIndicator] in the secondary tone, per the
+/// reference's restrained motion language (no bounce, no shimmer).
+class _SendingSpinner extends StatelessWidget {
+  const _SendingSpinner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Sending',
+      child: const ExcludeSemantics(
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.xs),
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Center(
+              child: SizedBox(
+                width: AppRadius.iconSize,
+                height: AppRadius.iconSize,
+                child: CircularProgressIndicator(
+                  color: AppColors.textSecondary,
+                  strokeWidth: 2,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

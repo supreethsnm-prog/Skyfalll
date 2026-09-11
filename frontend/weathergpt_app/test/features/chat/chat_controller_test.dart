@@ -4,9 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weathergpt_app/core/network/app_error.dart';
 import 'package:weathergpt_app/data/chat_api.dart';
+import 'package:weathergpt_app/data/geocoding_api.dart';
 import 'package:weathergpt_app/data/voice_api.dart';
+import 'package:weathergpt_app/data/weather_api.dart';
 import 'package:weathergpt_app/features/chat/chat_controller.dart';
 import 'package:weathergpt_app/features/chat/conversation_store.dart';
+import 'package:weathergpt_app/features/home/home_controller.dart';
+
+class _FixedHomeController extends HomeController {
+  _FixedHomeController(this._fixedState);
+  final HomeUiState _fixedState;
+
+  @override
+  HomeUiState build() => _fixedState;
+}
 
 /// Implements only the public interface ChatApi exposes — its private
 /// Dio field is not part of that interface, so no real Dio is needed.
@@ -15,11 +26,23 @@ class FakeChatApi implements ChatApi {
   AppError? nextError;
   final List<String> messagesSent = [];
   final List<List<dynamic>?> historiesSent = [];
+  double? lastLatitude;
+  double? lastLongitude;
+  String? lastPlaceName;
 
   @override
-  Future<ChatResult> sendMessage(String message, List<dynamic>? history) async {
+  Future<ChatResult> sendMessage(
+    String message,
+    List<dynamic>? history, {
+    double? latitude,
+    double? longitude,
+    String? placeName,
+  }) async {
     messagesSent.add(message);
     historiesSent.add(history);
+    lastLatitude = latitude;
+    lastLongitude = longitude;
+    lastPlaceName = placeName;
     if (nextError != null) throw nextError!;
     return nextResult!;
   }
@@ -40,16 +63,28 @@ class FakeVoiceApi implements VoiceApi {
   final List<String> languagesSent = [];
   final List<List<dynamic>?> historiesSent = [];
   final List<String> audioPathsSent = [];
+  final List<bool> autoDetectSent = [];
+  double? lastLatitude;
+  double? lastLongitude;
+  String? lastPlaceName;
 
   @override
   Future<VoiceChatResult> sendVoiceMessage({
     required File audioFile,
     required String language,
     List<dynamic>? history,
+    bool autoDetect = false,
+    double? latitude,
+    double? longitude,
+    String? placeName,
   }) async {
     audioPathsSent.add(audioFile.path);
     languagesSent.add(language);
     historiesSent.add(history);
+    autoDetectSent.add(autoDetect);
+    lastLatitude = latitude;
+    lastLongitude = longitude;
+    lastPlaceName = placeName;
     if (nextError != null) throw nextError!;
     return nextResult!;
   }
@@ -191,6 +226,7 @@ void main() {
       final audio = _tempWavFile();
       fakeVoiceApi.nextResult = const VoiceChatResult(
         transcript: 'Weather in Pune?',
+        detectedLanguage: 'hi',
         replyText: 'Sunny today',
         replyAudioBase64: '',
         history: [
@@ -219,6 +255,7 @@ void main() {
       final audio = _tempWavFile();
       fakeVoiceApi.nextResult = const VoiceChatResult(
         transcript: 'Weather in Pune?',
+        detectedLanguage: 'en',
         replyText: 'Sunny today',
         replyAudioBase64: 'd2F2ZWZvcm0=',
         history: [
@@ -249,6 +286,7 @@ void main() {
       final audio = _tempWavFile();
       fakeVoiceApi.nextResult = const VoiceChatResult(
         transcript: 'Weather?',
+        detectedLanguage: 'hi',
         replyText: 'Sunny',
         replyAudioBase64: '',
         history: [
@@ -271,6 +309,7 @@ void main() {
       final successAudio = _tempWavFile();
       fakeVoiceApi.nextResult = const VoiceChatResult(
         transcript: 'Hi',
+        detectedLanguage: 'hi',
         replyText: 'Hello',
         replyAudioBase64: '',
         history: [],
@@ -282,6 +321,33 @@ void main() {
       fakeVoiceApi.nextError = const NetworkTimeoutError();
       await container.read(chatControllerProvider.notifier).sendVoice(failureAudio.path, 'hi');
       expect(failureAudio.existsSync(), isFalse);
+    });
+
+    test('stamps the voice turns with the detected language and forwards '
+        'autoDetect to the API', () async {
+      final audio = _tempWavFile();
+      fakeVoiceApi.nextResult = const VoiceChatResult(
+        transcript: 'Weather in Pune?',
+        detectedLanguage: 'en',
+        replyText: 'Sunny today',
+        replyAudioBase64: '',
+        history: [
+          {'role': 'user', 'content': 'Weather in Pune?'},
+          {'role': 'assistant', 'content': 'Sunny today'},
+        ],
+      );
+
+      await container.read(chatControllerProvider.notifier).sendVoice(
+            audio.path,
+            'hi',
+            autoDetect: true,
+          );
+
+      final state = container.read(chatControllerProvider);
+      expect(state.messages, hasLength(2));
+      expect(state.messages[0].lang, 'en');
+      expect(state.messages[1].lang, 'en');
+      expect(fakeVoiceApi.autoDetectSent, [true]);
     });
 
     test('a failed voice send reverts to the messages from before the '
@@ -310,6 +376,104 @@ void main() {
       expect(state, isA<ChatIdle>());
       expect(state.messages, equals(messagesBefore));
       expect(reportedError, isA<NetworkConnectionError>());
+    });
+
+    test('forwards current location from HomeLoaded to sendMessage', () async {
+      const loc = GeocodeResult(
+        displayName: 'Pune, Maharashtra',
+        latitude: 18.5204,
+        longitude: 73.8567,
+        country: 'India',
+        state: 'Maharashtra',
+      );
+      const weather = CurrentWeather(
+        temperatureC: 24.4,
+        humidityPct: 78,
+        weatherCode: 1,
+        windSpeedKmh: 18.2,
+        windDirectionDeg: 247,
+        observedAt: '2026-09-09T14:00',
+        timezone: 'Asia/Kolkata',
+      );
+      final containerWithHome = ProviderContainer(
+        overrides: [
+          chatApiProvider.overrideWithValue(fakeApi),
+          voiceApiProvider.overrideWithValue(fakeVoiceApi),
+          conversationStoreProvider.overrideWithValue(_NoStore()),
+          homeControllerProvider.overrideWith(
+            () => _FixedHomeController(
+              const HomeLoaded(
+                location: loc,
+                weather: weather,
+                forecast: [],
+                nearbyAlerts: [],
+              ),
+            ),
+          ),
+        ],
+      );
+
+      fakeApi.nextResult = const ChatResult(reply: 'Cloudy', history: []);
+      await containerWithHome
+          .read(chatControllerProvider.notifier)
+          .sendMessage('Will it rain?');
+
+      expect(fakeApi.lastLatitude, 18.5204);
+      expect(fakeApi.lastLongitude, 73.8567);
+      expect(fakeApi.lastPlaceName, 'Pune, Maharashtra');
+    });
+
+    test('forwards current location from HomeLoaded to sendVoice', () async {
+      const loc = GeocodeResult(
+        displayName: 'Bengaluru, Karnataka',
+        latitude: 12.9716,
+        longitude: 77.5946,
+        country: 'India',
+        state: 'Karnataka',
+      );
+      const weather = CurrentWeather(
+        temperatureC: 22.0,
+        humidityPct: 70,
+        weatherCode: 1,
+        windSpeedKmh: 15.0,
+        windDirectionDeg: 90,
+        observedAt: '2026-09-09T14:00',
+        timezone: 'Asia/Kolkata',
+      );
+      final containerWithHome = ProviderContainer(
+        overrides: [
+          chatApiProvider.overrideWithValue(fakeApi),
+          voiceApiProvider.overrideWithValue(fakeVoiceApi),
+          conversationStoreProvider.overrideWithValue(_NoStore()),
+          homeControllerProvider.overrideWith(
+            () => _FixedHomeController(
+              const HomeLoaded(
+                location: loc,
+                weather: weather,
+                forecast: [],
+                nearbyAlerts: [],
+              ),
+            ),
+          ),
+        ],
+      );
+
+      final audio = _tempWavFile();
+      fakeVoiceApi.nextResult = const VoiceChatResult(
+        transcript: 'Weather?',
+        detectedLanguage: 'en',
+        replyText: 'Sunny',
+        replyAudioBase64: '',
+        history: [],
+      );
+
+      await containerWithHome
+          .read(chatControllerProvider.notifier)
+          .sendVoice(audio.path, 'en');
+
+      expect(fakeVoiceApi.lastLatitude, 12.9716);
+      expect(fakeVoiceApi.lastLongitude, 77.5946);
+      expect(fakeVoiceApi.lastPlaceName, 'Bengaluru, Karnataka');
     });
   });
 }
