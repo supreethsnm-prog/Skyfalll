@@ -383,3 +383,67 @@ def test_synthesized_tool_call_ids_are_unique_across_generate_calls():
 
     ids_seen = {call.id for call in turn1.tool_calls} | {call.id for call in turn2.tool_calls}
     assert len(ids_seen) == len(turn1.tool_calls) + len(turn2.tool_calls)
+
+
+def test_generate_extracts_thought_signature_and_call_id():
+    payload = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "functionCall": {
+                                "name": "geocode",
+                                "args": {"query": "Delhi"},
+                                "id": "call_123",
+                            },
+                            "thoughtSignature": "test-signature-blob",
+                        }
+                    ],
+                    "role": "model",
+                },
+                "finishReason": "STOP",
+            }
+        ]
+    }
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(payload))
+    turn = provider.generate(system="s", history=[{"role": "user", "content": "Delhi"}], tools=[])
+    assert len(turn.tool_calls) == 1
+    call = turn.tool_calls[0]
+    assert call.id == "call_123"
+    assert call.name == "geocode"
+    assert call.thought_signature == "test-signature-blob"
+
+
+def test_translate_history_preserves_thought_signature():
+    capture: dict = {}
+    provider = GeminiLLMProvider(api_key="k", client=_client_returning(_TEXT_PAYLOAD, capture))
+
+    history = [
+        {"role": "user", "content": "weather in Delhi"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_123",
+                    "name": "geocode",
+                    "input": {"query": "Delhi"},
+                    "thought_signature": "test-signature-blob",
+                }
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call_123",
+            "name": "geocode",
+            "content": '{"lat": 28.6, "lon": 77.2}',
+        },
+    ]
+
+    provider.generate(system="s", history=history, tools=[])
+    model_parts = capture["body"]["contents"][1]["parts"]
+    assert len(model_parts) == 1
+    assert model_parts[0]["thoughtSignature"] == "test-signature-blob"
+    assert model_parts[0]["functionCall"] == {"name": "geocode", "args": {"query": "Delhi"}}
+

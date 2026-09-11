@@ -135,14 +135,18 @@ def chat_turn(
                 logger.warning("LLM response truncated (stop_reason=max_tokens)")
 
             if turn.tool_calls:
+                tool_calls_data = []
+                for call in turn.tool_calls:
+                    call_dict = {"id": call.id, "name": call.name, "input": call.input}
+                    sig = getattr(call, "thought_signature", None)
+                    if sig:
+                        call_dict["thought_signature"] = sig
+                    tool_calls_data.append(call_dict)
                 conversation.append(
                     {
                         "role": "assistant",
                         "content": turn.text or "",
-                        "tool_calls": [
-                            {"id": call.id, "name": call.name, "input": call.input}
-                            for call in turn.tool_calls
-                        ],
+                        "tool_calls": tool_calls_data,
                     }
                 )
                 for call in turn.tool_calls:

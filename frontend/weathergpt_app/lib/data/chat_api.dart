@@ -71,6 +71,8 @@ ChatResult parseChatResult(Map<String, dynamic> json) {
   );
 }
 
+const _chatReceiveTimeout = Duration(seconds: 60);
+
 /// Wraps `POST /chat`. This endpoint is a single request/response call —
 /// it does NOT stream tokens. Any "typing"/"streaming" feel in the UI is
 /// a client-side animation over this one response, not a real stream
@@ -101,6 +103,7 @@ class ChatApi {
           if (longitude != null) 'longitude': longitude,
           if (placeName != null && placeName.isNotEmpty) 'place_name': placeName,
         },
+        options: Options(receiveTimeout: _chatReceiveTimeout),
       );
       return parseChatResult(response.data!);
     });

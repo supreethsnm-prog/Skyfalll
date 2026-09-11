@@ -65,7 +65,11 @@ def _translate_history(history: list[dict]) -> list[dict]:
                 parts.append({"text": entry["content"]})
             for call in entry.get("tool_calls") or []:
                 id_to_name[call["id"]] = call["name"]
-                parts.append({"functionCall": {"name": call["name"], "args": call["input"]}})
+                part: dict = {"functionCall": {"name": call["name"], "args": call["input"]}}
+                sig = call.get("thought_signature") or call.get("thoughtSignature")
+                if sig:
+                    part["thoughtSignature"] = sig
+                parts.append(part)
             if not parts:
                 parts.append({"text": ""})
             contents.append({"role": "model", "parts": parts})
@@ -129,7 +133,10 @@ class GeminiLLMProvider:
                 "GEMINI_API_KEY is not set. Set it in backend/.env or as an "
                 "environment variable to enable chat."
             )
-        self._model = model or settings.gemini_model
+        effective_model = model or settings.gemini_model
+        if model is None and effective_model in ("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"):
+            effective_model = "gemini-3.5-flash"
+        self._model = effective_model
         self._max_tokens = settings.gemini_max_tokens
         self._base_url = base_url
         self._owns_client = client is None
@@ -172,20 +179,14 @@ class GeminiLLMProvider:
                 text_parts.append(part["text"])
             elif "functionCall" in part:
                 function_call = part["functionCall"]
+                call_id = function_call.get("id") or f"gemini-{next(_call_id_counter)}"
+                thought_sig = part.get("thoughtSignature") or part.get("thought_signature")
                 tool_calls.append(
                     ToolCall(
-                        # Gemini supplies no call id. Synthesized ids must be
-                        # unique for the life of the process, not just within
-                        # one generate() call — an index-based id would repeat
-                        # across a conversation's rounds (round 1 and round 2
-                        # could both mint "gemini-0"), which is harmless today
-                        # (the server always attaches "name" to tool-role
-                        # history entries, so this id is never looked up) but
-                        # is a trap for any future code that correlates by id
-                        # across a whole conversation.
-                        id=f"gemini-{next(_call_id_counter)}",
+                        id=call_id,
                         name=function_call["name"],
                         input=function_call.get("args") or {},
+                        thought_signature=thought_sig,
                     )
                 )
 

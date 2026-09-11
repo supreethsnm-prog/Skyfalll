@@ -14,6 +14,7 @@ class ToolCall:
     id: str
     name: str
     input: dict
+    thought_signature: str | None = None
 
 
 @dataclass
