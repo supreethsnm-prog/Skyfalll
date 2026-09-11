@@ -29,6 +29,8 @@ class VoiceChatResult {
   /// auto-detect turns. Old backends omit it — then it falls back to the
   /// requested language on the caller side, never null here.
   final String detectedLanguage;
+  /// Bhashini code of the reply text (used for TTS synthesis).
+  final String replyLanguage;
   final String replyText;
 
   /// Empty when the backend could not synthesize the reply — a real,
@@ -43,6 +45,7 @@ class VoiceChatResult {
   const VoiceChatResult({
     required this.transcript,
     required this.detectedLanguage,
+    this.replyLanguage = '',
     required this.replyText,
     required this.replyAudioBase64,
     required this.history,
@@ -52,6 +55,7 @@ class VoiceChatResult {
     return VoiceChatResult(
       transcript: json['transcript'] as String,
       detectedLanguage: json['detected_language'] as String? ?? '',
+      replyLanguage: json['reply_language'] as String? ?? '',
       replyText: json['reply_text'] as String,
       replyAudioBase64: json['reply_audio_base64'] as String? ?? '',
       history: json['history'] as List<dynamic>,

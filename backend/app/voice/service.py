@@ -12,7 +12,7 @@ from collections.abc import Callable
 from app.chat.service import chat_turn
 from app.providers.bhashini import BhashiniSpeechProvider
 from app.providers.speech import SpeechToTextProvider, TextToSpeechProvider
-from app.voice.detect import judge_with_llm, pick_retry_language
+from app.voice.detect import detect_reply_language, judge_with_llm, pick_retry_language
 
 
 def synthesize_speech(
@@ -97,13 +97,19 @@ def voice_chat(
         reply_text = chat_result["reply"]
 
         reply_audio_base64 = ""
+        reply_language = (
+            detect_reply_language(reply_text, fallback=effective_language)
+            if reply_text
+            else effective_language
+        )
         if reply_text:
-            synthesis = tts.synthesize(text=reply_text, language=effective_language)
+            synthesis = tts.synthesize(text=reply_text, language=reply_language)
             reply_audio_base64 = synthesis.audio_base64
 
         return {
             "transcript": transcription.text,
             "detected_language": effective_language,
+            "reply_language": reply_language,
             "reply_text": reply_text,
             "reply_audio_base64": reply_audio_base64,
             "history": chat_result["history"],

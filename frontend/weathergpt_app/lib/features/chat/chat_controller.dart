@@ -217,6 +217,9 @@ class ChatController extends Notifier<ChatUiState> {
       final heardIn = result.detectedLanguage.isNotEmpty
           ? result.detectedLanguage
           : language;
+      final replyLang = result.replyLanguage.isNotEmpty
+          ? result.replyLanguage
+          : heardIn;
       final displayed = result.history
           .map(ChatTurn.tryFromRaw)
           .whereType<ChatTurn>()
@@ -225,7 +228,7 @@ class ChatController extends Notifier<ChatUiState> {
         displayed[displayed.length - 2] =
             displayed[displayed.length - 2].copyWith(lang: heardIn);
         displayed[displayed.length - 1] =
-            displayed[displayed.length - 1].copyWith(lang: heardIn);
+            displayed[displayed.length - 1].copyWith(lang: replyLang);
       }
       state = ChatIdle(displayed);
       await _persist(displayed);

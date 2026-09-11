@@ -116,6 +116,13 @@ def judge_with_llm(
         turn = generate(system=_LID_SYSTEM, history=[{"role": "user", "content": transcript}], tools=[])
         text = (getattr(turn, "text", "") or "").strip().lower()
     except Exception:
+        # Fallback heuristic for romanized Indian speech if the LLM judge is unavailable
+        import re
+
+        words = set(re.findall(r"[a-z]+", transcript.lower()))
+        _ROMANIZED_HINDI = {"mausam", "kaisa", "rahega", "hoga", "aaj", "kal", "kitna", "baarish", "garmi", "sardi", "batao"}
+        if len(words & _ROMANIZED_HINDI) >= 2:
+            return "hi"
         return None
     # Accept "hi", "hi-devanagari", " lang: mr " etc. — first supported token wins.
     import re
@@ -124,6 +131,54 @@ def judge_with_llm(
         if token in SUPPORTED_VOICE_LANGUAGES:
             return token
     return None
+
+
+_MARATHI_MARKERS: frozenset[str] = frozenset({
+    "आहे", "आहेत", "नाही", "मध्ये", "आणि", "कसे", "हवामान", "दिवस", "वार", "च्या", "ची", "चे", "करा"
+})
+
+
+def detect_reply_language(text: str, fallback: str = "en") -> str:
+    """Determine the optimal TTS language code for `text`.
+
+    Used by voice synthesis so the TTS engine uses the native voice
+    matching the reply text (e.g. Hindi voice for Devanagari text,
+    Telugu voice for Telugu script), rather than defaulting to the
+    input query's language.
+    """
+    if not text or not text.strip():
+        return fallback
+
+    script = script_of(text)
+    if script == "latin":
+        return "en"
+
+    if script == "devanagari":
+        # If fallback is already in Devanagari family, keep user's specific dialect
+        if fallback in _DEVANAGARI_FAMILY:
+            return fallback
+        import re
+        words = set(re.findall(r"[\u0900-\u097F]+", text))
+        if words & _MARATHI_MARKERS:
+            return "mr"
+        return "hi"
+
+    if script == "bengali":
+        import re
+        if re.search(r"[\u09F0\u09F1]", text):
+            return "as"
+        return "bn"
+
+    if script == "perso_arabic":
+        if fallback in _PERSO_ARABIC_FAMILY:
+            return fallback
+        return "ur"
+
+    cands = script_candidates(script)
+    if len(cands) == 1:
+        return cands[0]
+
+    return fallback
 
 
 def pick_retry_language(
