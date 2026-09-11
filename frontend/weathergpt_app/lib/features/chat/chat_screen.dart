@@ -264,10 +264,16 @@ class _ReadAloudAssistantMessage extends ConsumerWidget {
       await ref.read(voiceLanguageProvider.notifier).restored;
       final mode = ref.read(readAloudModeProvider);
       final global = ref.read(voiceLanguageProvider);
+      final fallbackScript = text.codeUnits.any((u) => u >= 0x0900 && u <= 0x097F)
+          ? 'hi'
+          : (text.codeUnits.any((u) => (u >= 0x0600 && u <= 0x06FF) || (u >= 0x0750 && u <= 0x077F))
+              ? 'ur'
+              : null);
       final language = mode == ReadAloudMode.global
           ? global
           : (messageLang ??
               guessLanguageFromScript(text) ??
+              fallbackScript ??
               global);
       final speech =
           await ref.read(voiceApiProvider).synthesize(text: text, language: language);

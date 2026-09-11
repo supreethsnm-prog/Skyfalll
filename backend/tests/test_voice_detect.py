@@ -1,4 +1,4 @@
-from app.voice.detect import pick_retry_language, script_of
+from app.voice.detect import detect_reply_language, pick_retry_language, script_of
 from app.voice.service import voice_chat
 
 
@@ -118,3 +118,61 @@ def test_voice_chat_legacy_path_unchanged_without_auto():
     assert stt.calls == ["hi"]
     assert result["detected_language"] == "hi"
     assert "transcript" in result
+
+
+def test_detect_reply_language_scripts():
+    assert detect_reply_language("The temperature is 32C", fallback="hi") == "en"
+    assert detect_reply_language("आज दिल्ली में मौसम साफ रहेगा।", fallback="en") == "hi"
+    assert detect_reply_language("आज मुंबईत हवामान कसे आहे?", fallback="en") == "mr"
+    assert detect_reply_language("ఈ రోజు వాతావరణం బాగుంది", fallback="en") == "te"
+    assert detect_reply_language("இன்று வானிலை நன்றாக உள்ளது", fallback="en") == "ta"
+    assert detect_reply_language("ನಾಳೆ ಮಳೆಯಾಗುವ ಸಾಧ್ಯತೆಯಿದೆ", fallback="en") == "kn"
+    assert detect_reply_language("আজ কলকাতায় আবহাওয়া কেমন থাকবে?", fallback="en") == "bn"
+    assert detect_reply_language("આજે અમદાવાદમાં ખૂબ ગરમી છે", fallback="en") == "gu"
+    assert detect_reply_language("ਅੱਜ ਅੰਮ੍ਰਿਤਸਰ ਵਿੱਚ ਮੌਸਮ", fallback="en") == "pa"
+    assert detect_reply_language("ଆଜି ପାଗ ଭଲ ଅଛି", fallback="en") == "or"
+    assert detect_reply_language("आज मौसम", fallback="mr") == "mr"
+    assert detect_reply_language("", fallback="en") == "en"
+
+
+def test_voice_chat_synthesizes_with_reply_language_when_input_was_en():
+    # User input was sent with fallback="en", but LLM replies in Hindi.
+    stt = _FakeSTT(["kaisa mausam hai"])
+    tts = _FakeTTS()
+
+    def _hindi_chat(message, history):
+        return {"reply": "आज दिल्ली में मौसम साफ रहेगा।", "history": []}
+
+    result = voice_chat(
+        audio_base64="ZmFrZQ==",
+        audio_format="wav",
+        language="en",
+        stt_provider=stt,
+        tts_provider=tts,
+        chat_fn=_hindi_chat,
+    )
+    assert result["detected_language"] == "en"
+    assert result["reply_language"] == "hi"
+    # TTS must be called with "hi", NOT "en"
+    assert tts.calls == ["hi"]
+
+
+def test_voice_chat_synthesizes_with_telugu_reply():
+    # User input was sent with fallback="en", but LLM replies in Telugu.
+    stt = _FakeSTT(["tell me weather"])
+    tts = _FakeTTS()
+
+    def _telugu_chat(message, history):
+        return {"reply": "ఈ రోజు వాతావరణం బాగుంది", "history": []}
+
+    result = voice_chat(
+        audio_base64="ZmFrZQ==",
+        audio_format="wav",
+        language="en",
+        stt_provider=stt,
+        tts_provider=tts,
+        chat_fn=_telugu_chat,
+    )
+    assert result["reply_language"] == "te"
+    assert tts.calls == ["te"]
+
