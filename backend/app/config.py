@@ -4,10 +4,13 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+_ROOT_ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(_ENV_FILE, _ROOT_ENV_FILE), extra="ignore"
+    )
 
     # 127.0.0.1, not "localhost" — "localhost" adds a multi-second
     # IPv6-then-IPv4 resolution stall on this machine before falling back;
@@ -52,6 +55,36 @@ class Settings(BaseSettings):
     cds_api_key: str | None = None
 
 
+def _read_env_value(key: str) -> str | None:
+    import os
+
+    # An empty env var is the test suite's way of isolating from .env — respect it.
+    if os.environ.get(key) == "":
+        return None
+
+    # If the ambient environment has a non-AQ key, keep it; if it's an AQ token, prefer .env
+    ambient = os.environ.get(key)
+    if ambient and not ambient.startswith("AQ."):
+        return ambient
+
+    for path in (_ENV_FILE, _ROOT_ENV_FILE):
+        if path.exists():
+            for line in path.read_text().splitlines():
+                line = line.strip()
+                if line.startswith(f"{key}=") and not line.startswith("#"):
+                    val = line.split("=", 1)[1].strip().strip("'\"")
+                    if val:
+                        return val
+    return ambient
+
+
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    file_gemini_key = _read_env_value("GEMINI_API_KEY")
+    if file_gemini_key:
+        settings.gemini_api_key = file_gemini_key
+    file_anthropic_key = _read_env_value("ANTHROPIC_API_KEY")
+    if file_anthropic_key:
+        settings.anthropic_api_key = file_anthropic_key
+    return settings

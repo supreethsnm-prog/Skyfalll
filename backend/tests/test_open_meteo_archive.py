@@ -73,10 +73,34 @@ def test_fetch_day_keeps_nulls_null():
 
 def test_fetch_day_returns_none_when_upstream_has_no_data():
     reading = _provider_returning(NO_DATA_RESPONSE).fetch_day(
-        latitude=0.0, longitude=0.0, date_str="1900-01-01"
+        latitude=0.0, longitude=0.0, date_str="1950-01-01"
     )
 
     assert reading is None
+
+
+def test_fetch_day_returns_none_for_dates_before_1940():
+    provider = OpenMeteoArchiveProvider()
+    reading = provider.fetch_day(latitude=0.0, longitude=0.0, date_str="1939-09-05")
+    assert reading is None
+
+
+def test_fetch_day_returns_none_on_400_out_of_range():
+    def handler(request):
+        return httpx.Response(
+            400,
+            json={
+                "error": True,
+                "reason": "Parameter 'start_date' is out of allowed range from 1940-01-01 to 2026-09-11",
+            },
+        )
+
+    provider = OpenMeteoArchiveProvider(
+        client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    reading = provider.fetch_day(latitude=15.36, longitude=75.12, date_str="1940-01-01")
+    assert reading is None
+
 
 
 def test_fetch_day_can_be_called_twice_on_the_same_provider():

@@ -72,3 +72,30 @@ def test_archive_endpoint_keeps_nulls_null_and_404s_on_no_data(monkeypatch):
         params={"lat": 0.0, "lon": 0.0, "date": "1900-01-01"},
     )
     assert response.status_code == 404
+
+
+def test_archive_endpoint_handles_year_1940_with_no_previous_year(monkeypatch):
+    def fake_fetch_day(self, latitude, longitude, date_str):
+        if date_str == "1940-09-05":
+            return ArchiveDayData(
+                date="1940-09-05",
+                temp_max_c=24.7,
+                temp_min_c=20.3,
+                temp_mean_c=21.9,
+                precip_sum_mm=2.0,
+                wind_speed_max_kmh=19.1,
+                wind_direction_dominant_deg=265,
+            )
+        return None
+
+    monkeypatch.setattr(OpenMeteoArchiveProvider, "fetch_day", fake_fetch_day)
+
+    response = client.get(
+        "/historical/archive",
+        params={"lat": 15.37, "lon": 75.13, "date": "1940-09-05", "name": "Dharwad"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reading"]["temp_max_c"] == 24.7
+    assert body["previous_year_reading"] is None
+

@@ -7,3 +7,8 @@ __pycache__/
 # cfgrib's own cache-index sidecar, auto-generated next to any .grib2 file
 # it opens (distinct from a real NOAA .idx sidecar, which has no hash)
 *.grib2.*.idx
+frontend/dev-env.sh
+frontend/weathergpt_app/build
+scripts/
+
+
