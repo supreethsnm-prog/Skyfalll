@@ -125,7 +125,7 @@ class _LeadHeadline extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        DynamicText(
           item.title,
           style: AppTypography.hero(AppColors.textPrimary).copyWith(fontSize: 28),
         ),
@@ -146,7 +146,7 @@ class _HeadlineRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        DynamicText(
           item.title,
           style: AppTypography.bodyBold(AppColors.textPrimary),
         ),

@@ -561,7 +561,7 @@ class _EmptyAdvisories extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(
-          'Want something specific?',
+          s.wantSomethingSpecific,
           style: AppTypography.label(AppColors.textSecondary),
         ),
         const SizedBox(height: AppSpacing.sm),

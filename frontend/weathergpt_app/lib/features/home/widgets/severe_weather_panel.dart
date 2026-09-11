@@ -81,9 +81,17 @@ class SevereWeatherPanel extends StatelessWidget {
             _GustRow(gustKmh: peakGustKmh, foreground: foreground, s: s),
             const SizedBox(height: AppSpacing.md),
           ],
-          _NearestConditionsRow(point: nearest, foreground: foreground),
+          _NearestConditionsRow(
+            point: nearest,
+            foreground: foreground,
+            s: s,
+          ),
           const SizedBox(height: AppSpacing.lg),
-          _DayStrip(points: sorted, foreground: foreground),
+          _DayStrip(
+            points: sorted,
+            foreground: foreground,
+            s: s,
+          ),
           const SizedBox(height: AppSpacing.sm),
           // Provenance: which model cycle this came from. Unobtrusive, but
           // present — it is part of the credibility of this screen.
@@ -157,7 +165,7 @@ class _CapeRow extends StatelessWidget {
                       color: chipColor,
                       borderRadius: BorderRadius.circular(AppRadius.panel / 2),
                     ),
-                    child: Text(band, style: AppTypography.label(chipForeground)),
+                    child: Text(s.riskBand(band), style: AppTypography.label(chipForeground)),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Text('${cape.round()} J/kg CAPE',
@@ -203,7 +211,7 @@ class _GustRow extends StatelessWidget {
         const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: Text(
-            'Peak gust ${gustKmh.round()} km/h',
+            s.peakGustLabel(gustKmh.round()),
             style: AppTypography.body(foreground),
           ),
         ),
@@ -231,10 +239,15 @@ class _GustRow extends StatelessWidget {
 /// when neither is modelled, and drops either half on its own when only
 /// one of the two is present.
 class _NearestConditionsRow extends StatelessWidget {
-  const _NearestConditionsRow({required this.point, required this.foreground});
+  const _NearestConditionsRow({
+    required this.point,
+    required this.foreground,
+    required this.s,
+  });
 
   final NwpPoint point;
   final Color foreground;
+  final AppStrings s;
 
   @override
   Widget build(BuildContext context) {
@@ -253,7 +266,7 @@ class _NearestConditionsRow extends StatelessWidget {
         if (cloud != null) ...[
           Icon(Icons.cloud_outlined, size: AppRadius.iconSize, color: foreground),
           const SizedBox(width: AppSpacing.xs),
-          Text('${cloud.round()}% cloud', style: AppTypography.body(foreground)),
+          Text(s.cloudCoverLabel(cloud.round()), style: AppTypography.body(foreground)),
         ],
       ],
     );
@@ -264,21 +277,24 @@ class _NearestConditionsRow extends StatelessWidget {
 /// plus a dot coloured by that hour's own CAPE band, so the trend across
 /// the five days is visible at a glance.
 class _DayStrip extends StatelessWidget {
-  const _DayStrip({required this.points, required this.foreground});
+  const _DayStrip({
+    required this.points,
+    required this.foreground,
+    required this.s,
+  });
 
   final List<NwpPoint> points;
   final Color foreground;
-
-  static const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final AppStrings s;
 
   /// `validTime` arrives as UTC with a `Z` suffix; `DateTime.parse` reads
   /// that as UTC, and `.toLocal()` converts for display — never a raw UTC
   /// string next to the local times shown elsewhere on Home.
-  static String _shortLocal(String validTimeUtc) {
+  static String _shortLocal(String validTimeUtc, AppStrings s) {
     final parsed = DateTime.tryParse(validTimeUtc);
     if (parsed == null) return validTimeUtc;
     final local = parsed.toLocal();
-    final weekday = _weekdays[local.weekday - 1];
+    final weekday = s.weekday(local.weekday);
     final hour = local.hour.toString().padLeft(2, '0');
     // Minutes are formatted, not assumed to be :00. GFS cycles are on the
     // hour in UTC, but India is UTC+5:30 — so every one of these converts
@@ -300,7 +316,10 @@ class _DayStrip extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(_shortLocal(p.validTime), style: AppTypography.caption(foreground)),
+                  Text(
+                    _shortLocal(p.validTime, s),
+                    style: AppTypography.caption(foreground),
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   _CapeDot(cape: p.capeJPerKg, foreground: foreground),
                 ],

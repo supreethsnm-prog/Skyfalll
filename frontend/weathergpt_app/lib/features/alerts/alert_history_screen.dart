@@ -134,20 +134,21 @@ class _Body extends ConsumerWidget {
   }
 }
 
-class _HistoryList extends StatelessWidget {
+class _HistoryList extends ConsumerWidget {
   const _HistoryList({required this.locationName, required this.alerts});
 
   final String locationName;
   final List<AlertSummary> alerts;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenMargin)
           .copyWith(bottom: AppSpacing.xxl),
       children: [
         Text(
-          'Past $alertHistoryWindowDays days · near $locationName',
+          s.pastDaysNear(alertHistoryWindowDays, locationName),
           style: AppTypography.label(AppColors.textSecondary),
         ),
         const SizedBox(height: AppSpacing.lg),

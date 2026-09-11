@@ -4,6 +4,7 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/weather_api.dart';
+import '../../../l10n/app_strings.dart';
 import '../../../shared/widgets/glass_panel.dart';
 import '../../../shared/widgets/weather_icon.dart';
 
@@ -18,27 +19,30 @@ class ForecastPanel extends StatelessWidget {
     super.key,
     required this.days,
     required this.foreground,
+    this.strings,
   });
 
   final List<ForecastDay> days;
 
   /// From `skyForeground(...)` — see [HomeHero] for why this is injected.
   final Color foreground;
+  final AppStrings? strings;
 
   @override
   Widget build(BuildContext context) {
+    final s = strings ?? AppStrings('en');
     return GlassPanel(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${days.length}-day forecast',
+            s.dayForecast(days.length),
             style: AppTypography.label(foreground),
           ),
           const SizedBox(height: AppSpacing.sm),
           for (final day in days)
-            _ForecastRow(day: day, foreground: foreground),
+            _ForecastRow(day: day, foreground: foreground, strings: s),
         ],
       ),
     );
@@ -46,10 +50,15 @@ class ForecastPanel extends StatelessWidget {
 }
 
 class _ForecastRow extends StatelessWidget {
-  const _ForecastRow({required this.day, required this.foreground});
+  const _ForecastRow({
+    required this.day,
+    required this.foreground,
+    required this.strings,
+  });
 
   final ForecastDay day;
   final Color foreground;
+  final AppStrings strings;
 
   /// `forecast_date` arrives as an ISO date string. A malformed value
   /// falls back to the raw string rather than throwing — a bad date from
@@ -58,8 +67,7 @@ class _ForecastRow extends StatelessWidget {
     final parsed = DateTime.tryParse(day.forecastDate);
     if (parsed == null) return day.forecastDate;
 
-    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return names[parsed.weekday - 1];
+    return strings.weekday(parsed.weekday);
   }
 
   @override

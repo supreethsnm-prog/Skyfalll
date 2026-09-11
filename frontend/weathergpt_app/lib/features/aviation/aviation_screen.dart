@@ -241,7 +241,7 @@ class _AirportHeader extends ConsumerWidget {
               // fake "0 km away".
               if (distanceKm != null)
                 Text(
-                  '${distanceKm!.round()} km away',
+                  s.distanceAway(distanceKm!.round()),
                   style: AppTypography.label(AppColors.textSecondary),
                 ),
               if (stationName != null)
@@ -395,14 +395,15 @@ class _CategoryBanner extends ConsumerWidget {
 /// from three hours ago support very different decisions. The raw report
 /// carries the timestamp as "100230Z", which is unreadable to anyone who
 /// is not a pilot, so it is shown in plain local time as well.
-class _ObservedAt extends StatelessWidget {
+class _ObservedAt extends ConsumerWidget {
   const _ObservedAt({required this.observedAtUtc, this.now});
 
   final String observedAtUtc;
   final DateTime? now;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     final parsed = DateTime.tryParse(observedAtUtc);
     // An unparseable timestamp is dropped rather than shown raw: a
     // half-rendered ISO string looks like a bug, and the raw report block
@@ -417,23 +418,24 @@ class _ObservedAt extends StatelessWidget {
     final ageText = age.isNegative
         ? ''
         : age.inMinutes < 60
-            ? ' · ${age.inMinutes} min ago'
-            : ' · ${age.inHours} h ago';
+            ? ' · ${s.minAgo(age.inMinutes)}'
+            : ' · ${s.hoursAgo(age.inHours)}';
 
     return Text(
-      'Observed $hh:$mm$ageText',
+      '${s.observed} $hh:$mm$ageText',
       style: AppTypography.caption(AppColors.textSecondary),
     );
   }
 }
 
-class _StatsGrid extends StatelessWidget {
+class _StatsGrid extends ConsumerWidget {
   const _StatsGrid({required this.reading});
 
   final MetarReading reading;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Column(
       children: [
         Row(
@@ -441,7 +443,7 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatTile(
                 icon: Icons.thermostat,
-                label: 'Temperature',
+                label: s.temperatureTile,
                 value: formatTemperatureC(reading.temperatureC),
               ),
             ),
@@ -449,7 +451,7 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatTile(
                 icon: Icons.water_drop_outlined,
-                label: 'Dew point',
+                label: s.dewPointTile,
                 value: formatTemperatureC(reading.dewpointC),
               ),
             ),
@@ -461,15 +463,15 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatTile(
                 icon: Icons.air,
-                label: 'Wind',
-                value: formatWind(reading.windDirDeg, reading.windSpeedKt),
+                label: s.windTile,
+                value: formatWind(reading.windDirDeg, reading.windSpeedKt, s),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: _StatTile(
                 icon: Icons.visibility_outlined,
-                label: 'Visibility',
+                label: s.visibilityTile,
                 value: formatVisibilityKm(reading.visibilityKm),
               ),
             ),
@@ -497,10 +499,13 @@ String? formatVisibilityKm(double? km) =>
 /// - both present: "260° at 17 km/h"
 /// - only one present: that one alone
 /// - neither: null (absent, not "0 km/h")
-String? formatWind(double? directionDeg, double? speedKt) {
+String? formatWind(double? directionDeg, double? speedKt, [AppStrings? strings]) {
   final direction = directionDeg == null ? null : '${directionDeg.round()}°';
   final speed = speedKt == null ? null : '${(speedKt * 1.852).round()} km/h';
-  if (direction != null && speed != null) return '$direction at $speed';
+  if (direction != null && speed != null) {
+    if (strings != null) return strings.windAtSpeed(direction, speed);
+    return '$direction at $speed';
+  }
   return speed ?? direction;
 }
 

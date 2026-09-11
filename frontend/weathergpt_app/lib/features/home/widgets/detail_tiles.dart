@@ -24,16 +24,24 @@ import '../weather_label.dart';
 /// The air-quality pill under the temperature. Returns an empty box when
 /// there is no reading, so the caller needs no null check of its own.
 class AqiPill extends StatelessWidget {
-  const AqiPill({super.key, required this.airQuality, required this.foreground});
+  const AqiPill({
+    super.key,
+    required this.airQuality,
+    required this.foreground,
+    this.strings,
+  });
 
   final AirQuality? airQuality;
   final Color foreground;
+  final AppStrings? strings;
 
   @override
   Widget build(BuildContext context) {
     final aqi = airQuality?.usAqi;
     final band = airQuality?.bandLabel;
     if (aqi == null || band == null) return const SizedBox.shrink();
+
+    final localizedBand = strings?.aqiBandLabel(aqi.toDouble()) ?? band;
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -51,7 +59,7 @@ class AqiPill extends StatelessWidget {
           Icon(Icons.masks_outlined, size: 16, color: foreground),
           const SizedBox(width: AppSpacing.sm),
           Text(
-            'AQI ${aqi.round()} · $band',
+            'AQI ${aqi.round()} · $localizedBand',
             style: AppTypography.label(foreground),
           ),
         ],

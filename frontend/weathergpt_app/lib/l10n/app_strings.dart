@@ -160,6 +160,106 @@ class AppStrings {
   String get globalLanguageDesc => get('globalLanguageDesc');
   String get change => get('change');
 
+  // Notices
+  String get locationTurnedOff => get('locationTurnedOff');
+  String get locationPermissionBlocked => get('locationPermissionBlocked');
+  String get showingNewDelhi => get('showingNewDelhi');
+
+  // Forecast & Days
+  String dayForecast(int count) =>
+      get('dayForecast').replaceAll('{count}', '$count');
+
+  String weekday(int weekday) {
+    const keys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sunShort'];
+    if (weekday >= 1 && weekday <= 7) return get(keys[weekday - 1]);
+    return '';
+  }
+
+  // AQI
+  String aqiBandLabel(double aqi) {
+    if (aqi <= 50) return get('aqiGood');
+    if (aqi <= 100) return get('aqiModerate');
+    if (aqi <= 150) return get('aqiUnhealthySensitive');
+    if (aqi <= 200) return get('aqiUnhealthy');
+    if (aqi <= 300) return get('aqiVeryUnhealthy');
+    return get('aqiHazardous');
+  }
+
+  // Severe Weather
+  String get cloud => get('cloud');
+  String get peakGust => get('peakGust');
+  String peakGustLabel(int gustKmh) => '${get('peakGust')} $gustKmh km/h';
+  String cloudCoverLabel(int cloudPct) => '$cloudPct% ${get('cloud')}';
+
+  String riskBand(String band) {
+    final key = 'risk$band';
+    final val = get(key);
+    return val != key ? val : band;
+  }
+
+  // Alerts
+  String pastDaysNear(int days, String location) => get('pastDaysNear')
+      .replaceAll('{days}', '$days')
+      .replaceAll('{location}', location);
+
+  String alertEventLabel(String rawEvent) {
+    if (languageCode == 'en') return rawEvent;
+    final lower = rawEvent.toLowerCase();
+    if (lower.contains('flood')) return get('alertFlood');
+    if (lower.contains('heavy rain') || lower.contains('rainfall')) return get('alertHeavyRain');
+    if (lower.contains('thunder')) return get('alertThunderstorm');
+    if (lower.contains('heat')) return get('alertHeatWave');
+    if (lower.contains('cold')) return get('alertColdWave');
+    if (lower.contains('squall')) return get('alertSquall');
+    if (lower.contains('gale')) return get('alertGale');
+    if (lower.contains('cyclon')) return get('alertCyclone');
+    return rawEvent;
+  }
+
+  // Aviation
+  String distanceAway(int km) => get('distanceAway').replaceAll('{km}', '$km');
+  String get observed => get('observed');
+  String minAgo(int min) => get('minAgo').replaceAll('{min}', '$min');
+  String hoursAgo(int hours) => get('hoursAgo').replaceAll('{hours}', '$hours');
+  String windAtSpeed(String? dir, String? spd) {
+    if (dir != null && spd != null) {
+      return get('atSpeed').replaceAll('{dir}', dir).replaceAll('{spd}', spd);
+    }
+    return spd ?? dir ?? '';
+  }
+  String get temperatureTile => get('temperatureTile');
+  String get dewPointTile => get('dewPointTile');
+  String get windTile => get('windTile');
+  String get visibilityTile => get('visibilityTile');
+
+  // Marine
+  String get noFishingAdvisories => get('noFishingAdvisories');
+  String get incoisCheckBack => get('incoisCheckBack');
+  String get issued => get('issued');
+  String get length => get('length');
+
+  // Advisories & Historical & Chat
+  String get wantSomethingSpecific => get('wantSomethingSpecific');
+  String get whatWouldYouLikeToKnow => get('whatWouldYouLikeToKnow');
+  String get askAboutWeather => get('askAboutWeather');
+  String get archive => get('archive');
+
+  String compareTempSentence(String currentLabel, String otherLabel, double diff) {
+    if (diff.abs() < 0.05) {
+      return get('sameTempAs')
+          .replaceAll('{date1}', currentLabel)
+          .replaceAll('{date2}', otherLabel);
+    }
+    final diffStr = diff.abs().toStringAsFixed(1);
+    final warmer = diff > 0 ? currentLabel : otherLabel;
+    final cooler = diff > 0 ? otherLabel : currentLabel;
+    return get('warmerThan')
+        .replaceAll('{warmer}', warmer)
+        .replaceAll('{cooler}', cooler)
+        .replaceAll('{diff}', diffStr);
+  }
+
+
   // Chat Composer & General
   String get micDisabled => get('micDisabled');
   String get micAccessNeeded => get('micAccessNeeded');

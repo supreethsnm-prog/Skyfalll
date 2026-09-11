@@ -340,7 +340,11 @@ class _LoadedView extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: AppSpacing.md),
-          AqiPill(airQuality: state.airQuality, foreground: foreground),
+          AqiPill(
+            airQuality: state.airQuality,
+            foreground: foreground,
+            strings: s,
+          ),
           const SizedBox(height: AppSpacing.xxl),
           // Absence of alerts is only informative once the user knows
           // whether this location is even in scope — our sources are
@@ -370,7 +374,11 @@ class _LoadedView extends ConsumerWidget {
             const SizedBox(height: AppSpacing.md),
           ],
           if (state.forecast.isNotEmpty) ...[
-            ForecastPanel(days: state.forecast, foreground: foreground),
+            ForecastPanel(
+              days: state.forecast,
+              foreground: foreground,
+              strings: s,
+            ),
             const SizedBox(height: AppSpacing.md),
           ],
           DetailGrid(
@@ -417,15 +425,15 @@ class _LocationNotice extends ConsumerWidget {
     // send the user to settings instead.
     final (String message, String action) = switch (failure) {
       LocationFailure.serviceDisabled => (
-          'Location is turned off.',
+          s.locationTurnedOff,
           s.settings,
         ),
       LocationFailure.permissionDeniedForever => (
-          'Location permission is blocked.',
+          s.locationPermissionBlocked,
           s.settings,
         ),
       LocationFailure.permissionDenied => (
-          'Showing New Delhi.',
+          s.showingNewDelhi,
           s.useMyLocation,
         ),
       LocationFailure.unavailable => (

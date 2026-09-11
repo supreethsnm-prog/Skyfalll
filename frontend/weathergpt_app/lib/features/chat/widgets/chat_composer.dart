@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../l10n/app_strings.dart';
 import '../../../shared/widgets/app_menu.dart';
 import '../voice_recording_controller.dart';
 import 'language_picker_sheet.dart';
@@ -99,11 +100,12 @@ class _ChatComposerState extends ConsumerState<ChatComposer> {
   }
 
   void _showMicPermissionDenied() {
+    final s = ref.read(uiStringsProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Microphone access is needed for voice input.'),
+        content: Text(s.micAccessNeeded),
         action: SnackBarAction(
-          label: 'Settings',
+          label: s.settings,
           onPressed: () => Geolocator.openAppSettings(),
         ),
       ),
@@ -120,24 +122,25 @@ class _ChatComposerState extends ConsumerState<ChatComposer> {
   }
 
   void _showAttachMenu(BuildContext context) {
+    final s = ref.read(uiStringsProvider);
     showAppMenu(
       context: context,
       items: [
         AppMenuItem(
           icon: Icons.photo_camera_outlined,
-          label: 'Camera',
+          label: s.camera,
           onTap: () {},
           iconWell: true,
         ),
         AppMenuItem(
           icon: Icons.photo_outlined,
-          label: 'Photos',
+          label: s.photos,
           onTap: () {},
           iconWell: true,
         ),
         AppMenuItem(
           icon: Icons.insert_drive_file_outlined,
-          label: 'Files',
+          label: s.files,
           onTap: () {},
           iconWell: true,
         ),
@@ -149,6 +152,7 @@ class _ChatComposerState extends ConsumerState<ChatComposer> {
   Widget build(BuildContext context) {
     final recordingState = ref.watch(voiceRecordingControllerProvider);
     final isRecording = recordingState is VoiceRecordingActive;
+    final s = ref.watch(uiStringsProvider);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -175,6 +179,8 @@ class _ChatComposerState extends ConsumerState<ChatComposer> {
                 amplitude: recordingState.amplitude,
                 onCancel: _cancelRecording,
                 onStopAndSend: _stopAndSendRecording,
+                cancelTooltip: s.cancelRecording,
+                stopAndSendTooltip: s.stopAndSend,
               )
             : Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -182,7 +188,7 @@ class _ChatComposerState extends ConsumerState<ChatComposer> {
                   Builder(
                     builder: (context) => _CircleAction(
                       icon: Icons.add,
-                      tooltip: 'Add attachment',
+                      tooltip: s.addAttachment,
                       onPressed:
                           widget.enabled ? () => _showAttachMenu(context) : null,
                     ),
@@ -200,7 +206,9 @@ class _ChatComposerState extends ConsumerState<ChatComposer> {
                       onSubmitted: (_) => _send(),
                       decoration: InputDecoration(
                         isDense: true,
-                        hintText: widget.hintText,
+                        hintText: widget.hintText == 'Ask about the weather'
+                            ? s.askAboutWeather
+                            : widget.hintText,
                         hintStyle: AppTypography.body(AppColors.textSecondary),
                         // The pill IS the input's chrome; the field itself must
                         // contribute no border of its own.
@@ -215,17 +223,18 @@ class _ChatComposerState extends ConsumerState<ChatComposer> {
                     ),
                   ),
                   if (widget.sending)
-                    const _SendingSpinner()
+                    _SendingSpinner(label: s.sending)
                   else if (_hasText)
                     _CircleAction(
                       icon: Icons.arrow_upward,
-                      tooltip: 'Send message',
+                      tooltip: s.sendMessage,
                       onPressed: widget.enabled ? _send : null,
                       filled: true,
                     )
                   else
                     _MicButton(
                       enabled: widget.enabled,
+                      tooltip: s.micTooltip,
                       onTap: _startRecording,
                       onLongPress: () => showLanguagePicker(context),
                     ),
@@ -245,11 +254,15 @@ class _RecordingRow extends StatelessWidget {
     required this.amplitude,
     required this.onCancel,
     required this.onStopAndSend,
+    this.cancelTooltip = 'Cancel recording',
+    this.stopAndSendTooltip = 'Stop and send',
   });
 
   final Stream<double> amplitude;
   final VoidCallback onCancel;
   final VoidCallback onStopAndSend;
+  final String cancelTooltip;
+  final String stopAndSendTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -258,7 +271,7 @@ class _RecordingRow extends StatelessWidget {
       children: [
         _CircleAction(
           icon: Icons.close,
-          tooltip: 'Cancel recording',
+          tooltip: cancelTooltip,
           onPressed: onCancel,
         ),
         Expanded(
@@ -269,7 +282,7 @@ class _RecordingRow extends StatelessWidget {
         ),
         _CircleAction(
           icon: Icons.stop,
-          tooltip: 'Stop and send',
+          tooltip: stopAndSendTooltip,
           onPressed: onStopAndSend,
           filled: true,
         ),
@@ -283,12 +296,14 @@ class _RecordingRow extends StatelessWidget {
 /// small [CircularProgressIndicator] in the secondary tone, per the
 /// reference's restrained motion language (no bounce, no shimmer).
 class _SendingSpinner extends StatelessWidget {
-  const _SendingSpinner();
+  const _SendingSpinner({this.label = 'Sending'});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'Sending',
+      label: label,
       child: const ExcludeSemantics(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.xs),
@@ -320,11 +335,13 @@ class _MicButton extends StatelessWidget {
     required this.enabled,
     required this.onTap,
     required this.onLongPress,
+    this.tooltip = 'Voice input — long-press to change language',
   });
 
   final bool enabled;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
+  final String tooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -332,7 +349,7 @@ class _MicButton extends StatelessWidget {
       onLongPress: enabled ? onLongPress : null,
       child: _CircleAction(
         icon: Icons.mic_none,
-        tooltip: 'Voice input — long-press to change language',
+        tooltip: tooltip,
         onPressed: enabled ? onTap : null,
       ),
     );

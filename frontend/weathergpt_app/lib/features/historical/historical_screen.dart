@@ -401,6 +401,7 @@ class _StatsGrid extends ConsumerWidget {
                 value: formatHistoricalWind(
                   reading.windDirectionDominantDeg,
                   reading.windSpeedMaxKmh,
+                  s,
                 ),
               ),
             ),
@@ -532,7 +533,7 @@ class _ComparisonSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(uiStringsProvider);
-    final diffText = _diffText();
+    final diffText = _diffText(s);
 
     return Container(
       width: double.infinity,
@@ -575,7 +576,7 @@ class _ComparisonSection extends ConsumerWidget {
     );
   }
 
-  String? _diffText() {
+  String? _diffText(AppStrings s) {
     final currentTemp = reading.tempMeanC;
     final otherTemp = comparisonReading.tempMeanC;
     if (currentTemp == null || otherTemp == null) return null;
@@ -584,13 +585,7 @@ class _ComparisonSection extends ConsumerWidget {
     final otherLabel = formatHistoricalDate(comparisonReading.date);
     final diff = currentTemp - otherTemp;
 
-    if (diff.abs() < 0.05) {
-      return '$currentLabel was about the same temperature as $otherLabel.';
-    }
-    final warmerLabel = diff > 0 ? currentLabel : otherLabel;
-    final coolerLabel = diff > 0 ? otherLabel : currentLabel;
-    return '$warmerLabel was ${diff.abs().toStringAsFixed(1)}°C warmer than '
-        '$coolerLabel.';
+    return s.compareTempSentence(currentLabel, otherLabel, diff);
   }
 }
 
@@ -758,11 +753,16 @@ String? formatDailyPrecipMm(double? mm) =>
 /// needs no conversion. Direction and speed are independently nullable, so
 /// each degrades on its own rather than either hiding a value the other
 /// has.
-String? formatHistoricalWind(double? directionDeg, double? speedKmh) {
+String? formatHistoricalWind(double? directionDeg, double? speedKmh, [AppStrings? strings]) {
   final direction =
       directionDeg == null ? null : windDirectionLabel(directionDeg);
   final speed = speedKmh == null ? null : '${speedKmh.round()} km/h';
-  if (direction != null && speed != null) return '$direction at $speed';
+  if (direction != null && speed != null) {
+    if (strings != null) {
+      return strings.windAtSpeed(direction, speed);
+    }
+    return '$direction at $speed';
+  }
   return speed ?? direction;
 }
 

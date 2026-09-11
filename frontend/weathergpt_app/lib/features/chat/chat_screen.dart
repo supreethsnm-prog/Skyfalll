@@ -16,6 +16,7 @@ import '../shell/app_drawer.dart';
 import 'audio_playback_controller.dart';
 import 'chat_controller.dart';
 import 'widgets/assistant_message.dart';
+import '../../l10n/app_strings.dart';
 import 'widgets/chat_composer.dart';
 import 'widgets/user_bubble.dart';
 
@@ -39,6 +40,7 @@ class ChatScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(chatControllerProvider);
     final controller = ref.read(chatControllerProvider.notifier);
+    final s = ref.watch(uiStringsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bgBase,
@@ -58,6 +60,7 @@ class ChatScreen extends ConsumerWidget {
                 onRetry: controller.retry,
               ),
             ChatComposer(
+              hintText: s.askAboutWeather,
               // Only an idle composer accepts input: while a send is in
               // flight or has failed, typing a new message would silently
               // discard the one already in play.
@@ -94,11 +97,12 @@ class ChatScreen extends ConsumerWidget {
   }
 }
 
-class _ChatChrome extends StatelessWidget {
+class _ChatChrome extends ConsumerWidget {
   const _ChatChrome();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.screenMargin),
       child: Row(
@@ -107,7 +111,7 @@ class _ChatChrome extends StatelessWidget {
           Builder(
             builder: (context) => RoundIconButton(
               icon: Icons.menu,
-              tooltip: 'Open menu',
+              tooltip: s.openMenu,
               onPressed: () => Scaffold.of(context).openDrawer(),
             ),
           ),
@@ -118,28 +122,34 @@ class _ChatChrome extends StatelessWidget {
               Builder(
                 builder: (context) => RoundIconButton(
                   icon: Icons.more_vert,
-                  tooltip: 'More options',
+                  tooltip: s.moreOptions,
                   onPressed: () => showAppMenu(
                     context: context,
-                    header: 'This conversation',
+                    header: s.thisConversation,
                     items: [
                       AppMenuItem(
-                          icon: Icons.ios_share, label: 'Share', onTap: () {}),
+                        icon: Icons.ios_share,
+                        label: s.share,
+                        onTap: () {},
+                      ),
                       AppMenuItem(
-                          icon: Icons.push_pin_outlined,
-                          label: 'Pin',
-                          onTap: () {}),
+                        icon: Icons.push_pin_outlined,
+                        label: s.pin,
+                        onTap: () {},
+                      ),
                       AppMenuItem(
-                          icon: Icons.search,
-                          label: 'Find in chat',
-                          onTap: () {}),
+                        icon: Icons.search,
+                        label: s.findInChat,
+                        onTap: () {},
+                      ),
                       AppMenuItem(
-                          icon: Icons.archive_outlined,
-                          label: 'Archive',
-                          onTap: () {}),
+                        icon: Icons.archive_outlined,
+                        label: s.archive,
+                        onTap: () {},
+                      ),
                       AppMenuItem(
                         icon: Icons.delete_outline,
-                        label: 'Delete',
+                        label: s.delete,
                         onTap: () {},
                         destructive: true,
                       ),
@@ -155,11 +165,12 @@ class _ChatChrome extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
+class _EmptyState extends ConsumerWidget {
   const _EmptyState();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(uiStringsProvider);
     // A centred single line, as in NewChat.jpeg — no illustration, no
     // feature tour, no suggestion grid. The composer below it is the
     // invitation.
@@ -167,7 +178,7 @@ class _EmptyState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Text(
-          'What would you like to know?',
+          s.whatWouldYouLikeToKnow,
           style: AppTypography.title(AppColors.textPrimary),
           textAlign: TextAlign.center,
         ),
