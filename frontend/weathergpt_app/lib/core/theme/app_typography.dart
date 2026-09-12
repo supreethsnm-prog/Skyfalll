@@ -13,11 +13,13 @@ class AppTypography {
 
   static const sans = 'Roboto';
   static const mono = 'RobotoMono';
+  static const fallbackFonts = ['NotoSansKannada', 'NotoSansDevanagari'];
 
   static TextStyle _sans(double size, FontWeight weight, Color color,
           {double? height}) =>
       TextStyle(
         fontFamily: sans,
+        fontFamilyFallback: fallbackFonts,
         fontSize: size,
         fontWeight: weight,
         color: color,

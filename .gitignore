@@ -10,5 +10,10 @@ __pycache__/
 frontend/dev-env.sh
 frontend/weathergpt_app/build
 scripts/
-
-
+frontend/weathergpt_app/Changes/*
+!frontend/weathergpt_app/Changes/NoAdvisories.jpeg
+!frontend/weathergpt_app/Changes/NoAlert.jpeg
+!frontend/weathergpt_app/Changes/NoChat.jpeg
+!frontend/weathergpt_app/Changes/NoMap.jpeg
+!frontend/weathergpt_app/Changes/Only3Loc.jpeg
+pptvers/
