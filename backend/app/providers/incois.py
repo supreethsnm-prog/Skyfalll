@@ -38,7 +38,7 @@ def _normalize_feature(feature: dict) -> PfzZoneData:
         raise TypeError(f"properties must be a dict, got {type(properties).__name__!r}")
     return PfzZoneData(
         external_id=feature["id"],
-        category=_safe_str(properties.get("Category")),
+        category=_safe_str(properties.get("Category")) or "PFZ",
         sector_boundary=_safe_int(properties.get("SECTORBOUN")),
         sector_name=_safe_str(properties.get("SECTORNAME")),
         julian_day=_safe_str(properties.get("Julian_day")),

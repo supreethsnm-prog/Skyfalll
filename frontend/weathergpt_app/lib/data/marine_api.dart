@@ -57,12 +57,12 @@ class PfzZone {
 
     return PfzZone(
       id: json['id'] as int,
-      externalId: json['external_id'] as String,
-      category: json['category'] as String,
-      sectorBoundary: json['sector_boundary'] as int,
-      julianDay: json['julian_day'] as String,
-      year: json['year'] as int,
-      lengthKm: (json['length_km'] as num).toDouble(),
+      externalId: (json['external_id'] as String?) ?? '',
+      category: (json['category'] as String?) ?? 'PFZ',
+      sectorBoundary: (json['sector_boundary'] as num?)?.toInt() ?? 0,
+      julianDay: json['julian_day']?.toString() ?? '',
+      year: (json['year'] as num?)?.toInt() ?? DateTime.now().year,
+      lengthKm: (json['length_km'] as num?)?.toDouble() ?? 0.0,
       lines: lines,
     );
   }

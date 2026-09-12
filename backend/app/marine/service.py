@@ -34,7 +34,13 @@ def list_pfz_zones(
 ) -> list[dict]:
     with get_engine().connect() as conn:
         rows = conn.execute(select(PfzZone)).mappings().all()
-    results = [{k: v for k, v in row.items() if k != "raw_payload"} for row in rows]
+    results = [
+        {
+            **{k: v for k, v in row.items() if k != "raw_payload"},
+            "category": row["category"] or "PFZ",
+        }
+        for row in rows
+    ]
 
     if latitude is None or longitude is None:
         if latitude is not None or longitude is not None:
